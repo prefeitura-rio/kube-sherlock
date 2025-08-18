@@ -1,0 +1,19 @@
+services:
+  k8s-debug-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MCP_K8S_URL=http://mcp-k8s-go:8080
+    depends_on:
+      - mcp-k8s-go
+
+  mcp-k8s-go:
+    image: ghcr.io/strowk/mcp-k8s-go:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - KUBECONFIG=/root/.kube/config
+    volumes:
+      - ~/.kube:/root/.kube:ro
+    restart: unless-stopped

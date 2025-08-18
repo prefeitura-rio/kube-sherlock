@@ -1,0 +1,32 @@
+# git
+.git
+.gitignore
+
+# python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+
+# env
+.env
+.envrc
+
+# docker
+Dockerfile
+.dockerignore
+docker-compose.yaml
+
+# docs
+README.md
+docs/
+*.md
+
+# nix
+flake.nix
+flake.lock
+.direnv
+
+# ai
+.claude

@@ -1,0 +1,15 @@
+# python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+
+# env
+.env
+
+# nix
+.direnv
+
+# ai
+.claude
