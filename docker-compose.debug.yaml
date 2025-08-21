@@ -1,0 +1,54 @@
+services:
+  redis-debug:
+    container_name: redis-debug
+    restart: always
+    image: bitnami/redis:latest
+    env_file: .env
+    volumes:
+      - redis_debug_data:/bitnami/redis/data
+
+  kube-sherlock-debug:
+    container_name: kube-sherlock-debug
+    restart: "no"
+    build:
+      context: .
+      args:
+        DEBUG: "true"
+    env_file: .env
+    command:
+      [
+        "uv",
+        "run",
+        "python",
+        "-Xfrozen_modules=off",
+        "-m",
+        "debugpy",
+        "--listen",
+        "0.0.0.0:5678",
+        "--wait-for-client",
+        "main.py",
+      ]
+    volumes:
+      - ./service-account.json:/app/service-account.json
+      - ./src:/app/src
+      - ./main.py:/app/main.py
+      - ./system-prompt.txt:/app/system-prompt.txt
+      - kube_config_debug:/root/.kube
+    ports:
+      - "5678:5678"
+    depends_on: [redis-debug]
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: sync
+          path: ./main.py
+          target: /app/main.py
+        - action: sync
+          path: ./system-prompt.txt
+          target: /app/system-prompt.txt
+
+volumes:
+  redis_debug_data:
+  kube_config_debug:

@@ -1,11 +1,18 @@
-@run:
-    uv run granian --interface asgi --host 0.0.0.0 --port 8000 --reload main:app
+default_compose_file := "docker-compose.yaml"
+debug_compose_file := "docker-compose.debug.yaml"
+compose_file := if env("DEBUG", "false") == "true" { debug_compose_file } else { default_compose_file }
+
+@watch:
+    docker compose -f {{ compose_file }} up --watch --build
 
 @up:
-    docker compose up
+    docker compose -f {{ compose_file }} up --build
 
 @down:
-    docker compose down
+    docker compose -f {{ compose_file }} down --remove-orphans
 
 @test:
     uv run pytest
+
+@typecheck:
+    uv run mypy .
