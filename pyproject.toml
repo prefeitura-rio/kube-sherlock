@@ -5,10 +5,59 @@ description = "A Discord chatbot for debugging Kubernetes logs"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-  "fastapi>=0.116.1",
-  "granian[reload,uvloop]>=2.5.0",
-  "httpx>=0.28.1",
-  "langchain>=0.3.27",
+  "anyio>=4.10.0",
+  "discord-py>=2.6.0",
+  "langchain-community>=0.3.27",
+  "langchain-mcp-adapters>=0.1.9",
+  "langchain[google-genai]>=0.3.27",
+  "langgraph-checkpoint-redis>=0.1.1",
+  "langgraph>=0.6.6",
+  "mcp-shell-server>=1.0.3",
+  "pydantic-settings>=2.10.1",
   "pydantic>=2.11.7",
-  "pytest>=8.0.0",
 ]
+
+[dependency-groups]
+debug = ["debugpy>=1.8.0"]
+dev = [
+  "deepeval>=3.4.0",
+  "mypy>=1.17.1",
+  "pytest>=8.0.0",
+  "ruff>=0.12.9",
+  "testcontainers>=4.12.0",
+]
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+useLibraryCodeForTypes = true
+reportAttributeAccessIssue = false
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+indent-width = 4
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+select = [
+  "A",
+  "ARG",
+  "ASYNC",
+  "B",
+  "C4",
+  "DTZ",
+  "E",
+  "F",
+  "I",
+  "N",
+  "PL",
+  "PT",
+  "PTH",
+  "RUF",
+  "W",
+]
+
+[tool.ruff.format]
+quote-style = "double"

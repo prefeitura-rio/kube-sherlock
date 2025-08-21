@@ -1,19 +1,40 @@
 services:
-  k8s-debug-agent:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - MCP_K8S_URL=http://mcp-k8s-go:8080
-    depends_on:
-      - mcp-k8s-go
-
-  mcp-k8s-go:
-    image: ghcr.io/strowk/mcp-k8s-go:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - KUBECONFIG=/root/.kube/config
+  redis:
+    container_name: redis
+    restart: always
+    image: bitnami/redis:latest
+    env_file: .env
     volumes:
-      - ~/.kube:/root/.kube:ro
-    restart: unless-stopped
+      - redis_data:/bitnami/redis/data
+
+  kube-sherlock:
+    container_name: kube-sherlock
+    restart: always
+    build:
+      context: .
+      args:
+        DEBUG: "false"
+    env_file: .env
+    volumes:
+      - ./service-account.json:/app/service-account.json
+      - kube_config:/root/.kube
+    depends_on: [redis]
+    # Uses default CMD from Dockerfile: ["uv", "run", "python", "main.py"]
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: sync
+          path: ./main.py
+          target: /app/main.py
+        - action: rebuild
+          path: ./pyproject.toml
+        - action: rebuild
+          path: ./uv.lock
+        - action: rebuild
+          path: ./Dockerfile
+
+volumes:
+  redis_data:
+  kube_config:
