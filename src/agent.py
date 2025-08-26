@@ -1,6 +1,5 @@
 from anyio import Path
 from langchain.chat_models import init_chat_model
-from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -16,19 +15,6 @@ class ResponseFormat(BaseModel):
     """Pydantic model for structured LLM responses"""
 
     content: str
-
-
-class LimitedSQLChatMessageHistory(SQLChatMessageHistory):
-    """SQLite chat history with message limit"""
-
-    def __init__(self, session_id: str, connection: str, max_messages: int = 50):
-        super().__init__(session_id, connection=connection)
-        self.max_messages = max_messages
-
-    @property
-    def messages(self):
-        all_messages = super().messages
-        return all_messages[-self.max_messages :]
 
 
 async def create_agent(checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
