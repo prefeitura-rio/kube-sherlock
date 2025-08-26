@@ -2,10 +2,11 @@ services:
   redis-debug:
     container_name: redis-debug
     restart: always
-    image: bitnami/redis:latest
-    env_file: .env
+    image: redis/redis-stack:latest
+    environment:
+      - REDIS_ARGS=--requirepass 1234567890
     volumes:
-      - redis_debug_data:/bitnami/redis/data
+      - redis_debug_data:/data
 
   kube-sherlock-debug:
     container_name: kube-sherlock-debug
