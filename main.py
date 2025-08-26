@@ -34,7 +34,7 @@ class SherlockBot(discord.Client):
 
         logger.info("Agent initialization complete.")
 
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if message.author == self.user:
             return
 
@@ -48,11 +48,12 @@ class SherlockBot(discord.Client):
         question = message.content.replace("!sherlock", "").strip()
         thread_id = f"channel_{message.channel.id}"
 
-        response = await get_llm_response(
-            agent=self.agent,
-            question=question,
-            thread_id=thread_id,
-        )
+        async with message.channel.typing():
+            response = await get_llm_response(
+                agent=self.agent,
+                question=question,
+                thread_id=thread_id,
+            )
 
         await handle_sherlock_message(message.channel, response)
 
