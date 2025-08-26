@@ -76,5 +76,11 @@ just typecheck  # Type checking
 
 - **Discord Integration**: Handles commands and message splitting
 - **LangChain**: Manages AI conversation flow and memory
-- **SQLite Memory**: Persistent per-channel conversation history
+- **Redis Memory**: Persistent per-channel conversation history
 - **Google Gemini**: AI model for generating responses
+
+# TODO
+
+- Add human-in-the-loop
+- Allow the model to self-iterate over its messages
+- Add tests
