@@ -2,6 +2,8 @@ FROM ghcr.io/astral-sh/uv:trixie-slim
 
 ARG DEBUG=false
 
+ARG MCP_VERSION=0.0.49
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y apt-transport-https ca-certificates curl tar gnupg lsb-release unzip --no-install-recommends
@@ -14,7 +16,7 @@ RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -
     && rm -rf /var/lib/apt/lists/*
 
 # install k8s MCP server
-RUN curl -L https://github.com/containers/kubernetes-mcp-server/releases/download/v0.0.49/kubernetes-mcp-server-linux-amd64 -o /usr/local/bin/kubernetes-mcp-server && chmod +x /usr/local/bin/kubernetes-mcp-server
+RUN curl -L https://github.com/containers/kubernetes-mcp-server/releases/download/v${MCP_VERSION}/kubernetes-mcp-server-linux-amd64 -o /usr/local/bin/kubernetes-mcp-server && chmod +x /usr/local/bin/kubernetes-mcp-server
 
 COPY pyproject.toml uv.lock main.py system-prompt.txt .
 

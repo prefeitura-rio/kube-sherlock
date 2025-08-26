@@ -2,6 +2,18 @@
 
 set -euo pipefail
 
+echo "Starting entrypoint.sh - setting up kubeconfig..."
+
+mkdir -p /root/.kube
+
+echo "apiVersion: v1
+kind: Config
+clusters: []
+contexts: []
+users: []
+current-context: \"\"" > /root/.kube/config
+
+echo "Processing service account files..."
 for file in /app/sa/*.json; do
     if [ -f "$file" ]; then
         filename=$(basename "$file" .json)
@@ -15,6 +27,8 @@ for file in /app/sa/*.json; do
 
             gcloud auth activate-service-account --key-file="$file"
             gcloud container clusters get-credentials "$cluster" --zone "$zone" --project "$project"
+
+            echo "✓ Successfully configured access to $cluster"
         else
             echo "Warning: Filename $filename does not match expected pattern project_cluster_zone"
 
@@ -22,5 +36,16 @@ for file in /app/sa/*.json; do
         fi
     fi
 done
+
+if [ -f "/root/.kube/config" ]; then
+    echo "✓ Kubeconfig created successfully at /root/.kube/config"
+    echo "Configured contexts:"
+    kubectl config get-contexts --no-headers || echo "No contexts found"
+else
+    echo "✗ Failed to create kubeconfig!"
+    exit 1
+fi
+
+echo "Entrypoint setup complete. Starting application..."
 
 exec "$@"
