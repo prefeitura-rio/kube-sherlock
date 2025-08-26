@@ -35,6 +35,7 @@ def pre_model_hook(model: BaseChatModel):
         token_counter=count_tokens_approximately,
         model=model,
         max_tokens=settings.CONTEXT_MAX_TOKENS,
+        max_tokens_before_summary=settings.CONTEXT_MAX_TOKENS,
         max_summary_tokens=settings.SUMMARIZATION_MAX_TOKENS,
         output_messages_key="llm_input_messages",
     )
@@ -74,14 +75,18 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
     logger.info("Received question: %s", question)
     logger.info("Session ID: %s", thread_id)
 
-    model_response = await agent.ainvoke(
-        input={"messages": [{"role": "user", "content": question}]},
-        config=RunnableConfig(configurable={"thread_id": thread_id}),
-    )
+    try:
+        model_response = await agent.ainvoke(
+            input={"messages": [{"role": "user", "content": question}]},
+            config=RunnableConfig(configurable={"thread_id": thread_id}),
+        )
 
-    response: ResponseFormat = model_response["structured_response"]
+        response: ResponseFormat = model_response["structured_response"]
 
-    logger.info("Model response: %s ... (truncated)", response.content[:100])
-    logger.info("Response length: %d chars", len(response.content))
+        logger.info("Model response: %s ... (truncated)", response.content[:100])
+        logger.info("Response length: %d chars", len(response.content))
 
-    return response.content
+        return response.content
+    except Exception as e:
+        logger.error("Error getting LLM response: %s", str(e))
+        return "I apologize, but I encountered an error processing your request. Please try again."
