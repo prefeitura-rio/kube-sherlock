@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     CONTEXT_MAX_TOKENS: int = 20000
     KUBECONFIG_PATH: str = "/root/.kube/config"
     MAX_WAIT: int = 30
+    SUMMARIZATION_MAX_TOKENS: int = 512
 
 
 settings = Settings()

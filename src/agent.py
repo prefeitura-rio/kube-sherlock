@@ -1,6 +1,7 @@
 from anyio import Path
 from langchain.chat_models import init_chat_model
-from langchain_core.messages.utils import count_tokens_approximately, trim_messages
+from langchain.chat_models.base import BaseChatModel
+from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -8,6 +9,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from langgraph.store.base import BaseStore
+from langmem.short_term import RunningSummary, SummarizationNode
 from pydantic import BaseModel
 
 from .logger import logger
@@ -20,18 +22,21 @@ class ResponseFormat(BaseModel):
     content: str
 
 
-def pre_model_hook(state: AgentState):
-    """Pre-process messages before sending to the LLM"""
-    trimmed_messages = trim_messages(
-        state["messages"],
-        strategy="last",
-        token_counter=count_tokens_approximately,
-        max_tokens=settings.CONTEXT_MAX_TOKENS,
-        start_on="human",
-        end_on=("human", "tool"),
-    )
+class State(AgentState):
+    """Custom state to hold running summary"""
 
-    return {"llm_input_messages": trimmed_messages}
+    context: dict[str, RunningSummary]
+
+
+def pre_model_hook(model: BaseChatModel):
+    """Pre-process messages before sending to the LLM"""
+    return SummarizationNode(
+        token_counter=count_tokens_approximately,
+        model=model,
+        max_tokens=settings.CONTEXT_MAX_TOKENS,
+        max_summary_tokens=settings.SUMMARIZATION_MAX_TOKENS,
+        output_messages_key="llm_input_messages",
+    )
 
 
 async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
@@ -54,7 +59,8 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
         checkpointer=checkpointer,
         store=store,
         response_format=ResponseFormat,
-        pre_model_hook=pre_model_hook,
+        pre_model_hook=pre_model_hook(model),
+        state_schema=State,
     )
 
     logger.info("Agent created successfully.")
