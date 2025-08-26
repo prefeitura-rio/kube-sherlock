@@ -26,6 +26,7 @@ class State(AgentState):
     """Custom state to hold running summary"""
 
     context: dict[str, RunningSummary]
+    structured_response: ResponseFormat
 
 
 def pre_model_hook(model: BaseChatModel):
