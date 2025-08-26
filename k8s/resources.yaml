@@ -38,18 +38,18 @@ spec:
               mountPath: /app/sa/rj-superapp_application_us-central1.json
               subPath: rj-superapp_application_us-central1.json
               readOnly: true
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 10
-            periodSeconds: 5
           readinessProbe:
             httpGet:
               path: /health
-              port: 8000
-            initialDelaySeconds: 5
-            periodSeconds: 5
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 40
+            periodSeconds: 10
       volumes:
         - name: rj-superapp-staging-sa
           secret:
