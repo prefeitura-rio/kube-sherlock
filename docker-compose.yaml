@@ -17,6 +17,8 @@ services:
     volumes:
       - ./service-account.json:/app/service-account.json
       - kube_config:/root/.kube
+    ports:
+      - "8080:8080"
     depends_on: [redis]
     develop:
       watch:

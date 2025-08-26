@@ -5,6 +5,7 @@ description = "A Discord chatbot for debugging Kubernetes logs"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+  "aiohttp>=3.10.0",
   "anyio>=4.10.0",
   "discord-py>=2.6.0",
   "langchain-community>=0.3.27",

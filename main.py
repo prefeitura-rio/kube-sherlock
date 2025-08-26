@@ -1,3 +1,4 @@
+import asyncio
 import sys
 
 import uvloop
@@ -9,6 +10,7 @@ from langgraph.store.redis.aio import AsyncRedisStore
 import discord
 from src.agent import create_agent, get_llm_response
 from src.discord import handle_sherlock_message
+from src.healthcheck import run_health_server
 from src.logger import logger
 from src.mcp import get_mcp_client
 from src.settings import settings
@@ -80,7 +82,9 @@ async def main():
         AsyncRedisStore.from_conn_string(settings.REDIS_URL) as store,
         AsyncRedisSaver.from_conn_string(settings.REDIS_URL) as checkpointer,
     ):
-        await SherlockBot(intents, store, checkpointer).start(settings.DISCORD_BOT_TOKEN)
+        bot = SherlockBot(intents, store, checkpointer)
+
+        await asyncio.gather(run_health_server(), bot.start(settings.DISCORD_BOT_TOKEN))
 
 
 if __name__ == "__main__":
