@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-sherlock
+  annotations:
+    secrets.infisical.com/auto-reload: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-sherlock
+  template:
+    metadata:
+      labels:
+        app: kube-sherlock
+      annotations:
+        sidecar.istio.io/rewriteAppHTTPProbers: "false"
+    spec:
+      containers:
+        - name: kube-sherlock
+          image: ghcr.io/prefeitura-rio/kube-sherlock:latest
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1024Mi"
+          envFrom:
+            - secretRef:
+                name: kube-sherlock-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-sherlock
+  labels:
+    app: kube-sherlock
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+  selector:
+    app: kube-sherlock
