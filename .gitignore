@@ -13,4 +13,7 @@ __pycache__
 
 # ai
 .claude
+CLAUDE.md
+
+# credentials
 service-account.json
