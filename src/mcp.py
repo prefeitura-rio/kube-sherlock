@@ -13,7 +13,7 @@ def get_mcp_client() -> MultiServerMCPClient:
             "command": "uv",
             "args": ["run", "mcp-shell-server"],
             "transport": "stdio",
-            "env": {"ALLOW_COMMANDS": "cat,grep,echo,ls,find"},
+            "env": {"ALLOW_COMMANDS": "cat,grep,echo,ls,find,du"},
         },
     }
 
