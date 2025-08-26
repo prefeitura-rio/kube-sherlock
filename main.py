@@ -1,24 +1,28 @@
 import sys
 
-from langgraph.checkpoint.memory import InMemorySaver
+import uvloop
+from langchain_core.tools import BaseTool
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.store.redis.aio import AsyncRedisStore
 
 import discord
 from src.agent import create_agent, get_llm_response
 from src.discord import handle_sherlock_message
 from src.logger import logger
 from src.mcp import get_mcp_client
-from src.settings import Settings
+from src.settings import settings
 
 
 class SherlockBot(discord.Client):
-    def __init__(self, settings: Settings, intents: discord.Intents):
+    def __init__(self, intents: discord.Intents, store: AsyncRedisStore, checkpointer: AsyncRedisSaver):
         super().__init__(intents=intents)
 
-        self.settings = settings
         self.client = get_mcp_client()
-        self.checkpointer = InMemorySaver()
-        self.agent = None
-        self.tools = None
+        self.store = store
+        self.checkpointer = checkpointer
+        self.agent: CompiledStateGraph = None
+        self.tools: list[BaseTool] = None
 
     async def on_ready(self):
         logger.info("%s has connected to Discord", self.user)
@@ -26,7 +30,7 @@ class SherlockBot(discord.Client):
 
         self.tools = await self.client.get_tools()
 
-        self.agent = await create_agent(self.checkpointer, self.tools)
+        self.agent = await create_agent(self.store, self.checkpointer, self.tools)
 
         logger.info("Agent initialization complete.")
 
@@ -53,8 +57,7 @@ class SherlockBot(discord.Client):
         await handle_sherlock_message(message.channel, response)
 
 
-if __name__ == "__main__":
-    settings = Settings()
+async def main():
     logger.info("Starting Discord bot...")
 
     if not settings.GOOGLE_API_KEY:
@@ -65,8 +68,19 @@ if __name__ == "__main__":
         logger.error("`DISCORD_BOT_TOKEN` is not set. Please add to the environment.")
         sys.exit(1)
 
+    if not settings.REDIS_URL:
+        logger.error("`REDIS_URL` is not set. Please add to the environment.")
+        sys.exit(1)
+
     intents = discord.Intents.default()
     intents.message_content = True
 
-    bot = SherlockBot(settings, intents)
-    bot.run(settings.DISCORD_BOT_TOKEN, log_handler=None)
+    async with (
+        AsyncRedisStore.from_conn_string(settings.REDIS_URL) as store,
+        AsyncRedisSaver.from_conn_string(settings.REDIS_URL) as checkpointer,
+    ):
+        await SherlockBot(intents, store, checkpointer).start(settings.DISCORD_BOT_TOKEN)
+
+
+if __name__ == "__main__":
+    uvloop.run(main())

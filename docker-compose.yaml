@@ -19,7 +19,6 @@ services:
       - ./service-account.json:/app/service-account.json
       - kube_config:/root/.kube
     depends_on: [redis]
-    # Uses default CMD from Dockerfile: ["uv", "run", "python", "main.py"]
     develop:
       watch:
         - action: sync

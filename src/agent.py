@@ -5,10 +5,11 @@ from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
+from langgraph.store.base import BaseStore
 from pydantic import BaseModel
 
 from .logger import logger
-from .settings import Settings
+from .settings import settings
 
 
 class ResponseFormat(BaseModel):
@@ -17,11 +18,10 @@ class ResponseFormat(BaseModel):
     content: str
 
 
-async def create_agent(checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
+async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
     """Create and configure the LangGraph agent with MCP tools"""
     logger.info("Initializing agent with MCP tools...")
 
-    settings = Settings()
     model = init_chat_model(settings.MODEL_NAME, model_provider="google_genai")
     prompt = await Path("system-prompt.txt").read_text()
     prompt = prompt.strip()
@@ -36,6 +36,7 @@ async def create_agent(checkpointer: BaseCheckpointSaver, tools: list[BaseTool])
         prompt=prompt,
         tools=tools,
         checkpointer=checkpointer,
+        store=store,
         response_format=ResponseFormat,
     )
 
