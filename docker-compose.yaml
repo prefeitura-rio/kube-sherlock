@@ -13,8 +13,6 @@ services:
     restart: always
     build:
       context: .
-      args:
-        DEBUG: "false"
     env_file: .env
     volumes:
       - ./service-account.json:/app/service-account.json
@@ -28,6 +26,9 @@ services:
         - action: sync
           path: ./main.py
           target: /app/main.py
+        - action: sync
+          path: ./system-prompt.txt
+          target: /app/system-prompt.txt
         - action: rebuild
           path: ./pyproject.toml
         - action: rebuild

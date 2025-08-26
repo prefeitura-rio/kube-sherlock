@@ -1,15 +1,15 @@
 services:
-  redis-debug:
-    container_name: redis-debug
+  redis:
+    container_name: redis
     restart: always
     image: redis/redis-stack:latest
     environment:
-      - REDIS_ARGS=--requirepass 1234567890
+      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD}
     volumes:
-      - redis_debug_data:/data
+      - redis_data:/data
 
-  kube-sherlock-debug:
-    container_name: kube-sherlock-debug
+  kube-sherlock:
+    container_name: kube-sherlock
     restart: "no"
     build:
       context: .
@@ -17,27 +17,22 @@ services:
         DEBUG: "true"
     env_file: .env
     command:
-      [
-        "uv",
-        "run",
-        "python",
-        "-Xfrozen_modules=off",
-        "-m",
-        "debugpy",
-        "--listen",
-        "0.0.0.0:5678",
-        "--wait-for-client",
-        "main.py",
-      ]
+      - "uv"
+      - "run"
+      - "python"
+      - "-Xfrozen_modules=off"
+      - "-m"
+      - "debugpy"
+      - "--listen"
+      - "0.0.0.0:5678"
+      - "--wait-for-client"
+      - "main.py"
     volumes:
       - ./service-account.json:/app/service-account.json
-      - ./src:/app/src
-      - ./main.py:/app/main.py
-      - ./system-prompt.txt:/app/system-prompt.txt
-      - kube_config_debug:/root/.kube
+      - kube_config:/root/.kube
     ports:
       - "5678:5678"
-    depends_on: [redis-debug]
+    depends_on: [redis]
     develop:
       watch:
         - action: sync
@@ -49,7 +44,13 @@ services:
         - action: sync
           path: ./system-prompt.txt
           target: /app/system-prompt.txt
+        - action: rebuild
+          path: ./pyproject.toml
+        - action: rebuild
+          path: ./uv.lock
+        - action: rebuild
+          path: ./Dockerfile
 
 volumes:
-  redis_debug_data:
-  kube_config_debug:
+  redis_data:
+  kube_config:
