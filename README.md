@@ -53,6 +53,8 @@ The entrypoint script will:
 
 This allows the bot to access multiple Kubernetes clusters across different projects and zones automatically.
 
+**Note:** The entrypoint script allows only one cluster authentication per project. If multiple service account files exist for the same project, the last one processed will be the active cluster connection for that project.
+
 ### Development
 
 Start the bot with hot reload:
