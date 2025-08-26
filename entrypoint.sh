@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-echo "Starting entrypoint.sh - setting up kubeconfig..."
+echo "🚀 Starting entrypoint.sh - setting up kubeconfig..."
 
 mkdir -p /root/.kube
 
@@ -13,7 +13,7 @@ contexts: []
 users: []
 current-context: \"\"" > /root/.kube/config
 
-echo "Processing service account files..."
+echo "🔍 Processing service account files..."
 for file in /app/sa/*.json; do
     if [ -f "$file" ]; then
         filename=$(basename "$file" .json)
@@ -23,14 +23,14 @@ for file in /app/sa/*.json; do
             cluster="${BASH_REMATCH[2]}"
             zone="${BASH_REMATCH[3]}"
 
-            echo "Activating service account for project: $project, cluster: $cluster, zone: $zone"
+            echo "🔑 Activating service account for project: $project, cluster: $cluster, zone: $zone"
 
             gcloud auth activate-service-account --key-file="$file"
             gcloud container clusters get-credentials "$cluster" --zone "$zone" --project "$project"
 
-            echo "✓ Successfully configured access to $cluster"
+            echo "✅ Successfully configured access to $cluster in project $project"
         else
-            echo "Warning: Filename $filename does not match expected pattern project_cluster_zone"
+            echo "⚠️ Warning: filename $filename does not match expected pattern project_cluster_zone"
 
             gcloud auth activate-service-account --key-file="$file"
         fi
@@ -38,14 +38,14 @@ for file in /app/sa/*.json; do
 done
 
 if [ -f "/root/.kube/config" ]; then
-    echo "✓ Kubeconfig created successfully at /root/.kube/config"
-    echo "Configured contexts:"
-    kubectl config get-contexts --no-headers || echo "No contexts found"
+    echo "✅ Kubeconfig created successfully at /root/.kube/config"
+    echo "📋 Configured contexts:"
+    kubectl config get-contexts --no-headers -o name || echo "❌ No contexts found"
 else
-    echo "✗ Failed to create kubeconfig!"
+    echo "❌ Failed to create kubeconfig!"
     exit 1
 fi
 
-echo "Entrypoint setup complete. Starting application..."
+echo "🎯 Entrypoint setup complete. Starting application..."
 
 exec "$@"
