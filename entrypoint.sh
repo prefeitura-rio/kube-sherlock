@@ -1,9 +1,26 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
-if [ -f "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]; then
-    gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
-    gcloud container clusters get-credentials "$GCLOUD_CLUSTER" --zone "$GCLOUD_ZONE" --project "$GCLOUD_PROJECT"
-fi
+for file in /app/sa/*.json; do
+    if [ -f "$file" ]; then
+        filename=$(basename "$file" .json)
+
+        if [[ $filename =~ ^(.+)_(.+)_(.+)$ ]]; then
+            project="${BASH_REMATCH[1]}"
+            cluster="${BASH_REMATCH[2]}"
+            zone="${BASH_REMATCH[3]}"
+
+            echo "Activating service account for project: $project, cluster: $cluster, zone: $zone"
+
+            gcloud auth activate-service-account --key-file="$file"
+            gcloud container clusters get-credentials "$cluster" --zone "$zone" --project "$project"
+        else
+            echo "Warning: Filename $filename does not match expected pattern project_cluster_zone"
+
+            gcloud auth activate-service-account --key-file="$file"
+        fi
+    fi
+done
 
 exec "$@"

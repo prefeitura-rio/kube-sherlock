@@ -28,7 +28,7 @@ services:
       - "--wait-for-client"
       - "main.py"
     volumes:
-      - ./service-account.json:/app/service-account.json
+      - ./sa:/app/sa
       - kube_config:/root/.kube
     ports:
       - "5678:5678"

@@ -30,6 +30,29 @@ GOOGLE_API_KEY=your_google_api_key_here
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 ```
 
+### Service Account Configuration
+
+The bot automatically authenticates with Google Cloud using service account files placed in `/app/sa/`. The service account filenames must follow the pattern:
+
+```
+project_cluster_zone.json
+```
+
+**Example:**
+
+- `my-project-dev_web-cluster_us-east1.json`
+  - Project: `my-project-dev`
+  - Cluster: `web-cluster`
+  - Zone: `us-east1`
+
+The entrypoint script will:
+
+1. Parse each service account filename to extract project, cluster, and zone information
+2. Activate the service account with `gcloud auth activate-service-account`
+3. Automatically connect to the corresponding Kubernetes cluster using `gcloud container clusters get-credentials`
+
+This allows the bot to access multiple Kubernetes clusters across different projects and zones automatically.
+
 ### Development
 
 Start the bot with hot reload:
@@ -57,7 +80,7 @@ just up
 In Discord, use the `!sherlock` command followed by your Kubernetes question:
 
 ```
-!sherlock Por que meu pod est· em CrashLoopBackOff?
+!sherlock Por que meu pod est√° em CrashLoopBackOff?
 ```
 
 The bot will respond with troubleshooting advice in Portuguese, maintaining conversation context per channel.

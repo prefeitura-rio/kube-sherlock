@@ -15,7 +15,7 @@ services:
       context: .
     env_file: .env
     volumes:
-      - ./service-account.json:/app/service-account.json
+      - ./sa:/app/sa
       - kube_config:/root/.kube
     ports:
       - "8080:8080"
