@@ -31,11 +31,11 @@ spec:
                 name: kube-sherlock-secrets
           volumeMounts:
             - name: rj-superapp-staging-sa
-              mountPath: /sa/rj-superapp-staging_application_us-central1.json
+              mountPath: /app/sa/rj-superapp-staging_application_us-central1.json
               subPath: rj-superapp-staging_application_us-central1.json
               readOnly: true
             - name: rj-superapp-sa
-              mountPath: /sa/rj-superapp_application_us-central1.json
+              mountPath: /app/sa/rj-superapp_application_us-central1.json
               subPath: rj-superapp_application_us-central1.json
               readOnly: true
           livenessProbe:
