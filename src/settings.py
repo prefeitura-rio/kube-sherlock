@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     REDIS_URL: str | None = None
     MODEL_NAME: str = "gemini-2.5-flash"
     LOG_LEVEL: str = "INFO"
-    MAX_MESSAGES: int = 50
+    CONTEXT_MAX_TOKENS: int = 20000
 
 
 settings = Settings()
