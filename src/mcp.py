@@ -6,7 +6,7 @@ def get_mcp_client() -> MultiServerMCPClient:
     servers: dict[str, Connection] = {
         "kubernetes-mcp-server": {
             "command": "kubernetes-mcp-server",
-            "args": ["--disable-destructive"],
+            "args": ["--disable-destructive", "--kubeconfig", "$HOME/.kube/config"],
             "transport": "stdio",
         },
         "shell": {
