@@ -41,14 +41,29 @@ class SherlockBot(discord.Client):
         if message.author == self.user:
             return
 
+        match message.channel:
+            case discord.DMChannel():
+                if not settings.whitelisted_users:
+                    await message.channel.send("DMs não estão habilitadas para este bot.")
+                    return
+
+                if message.author.name not in settings.whitelisted_users:
+                    await message.channel.send("Você não tem permissão para usar este bot em DM.")
+                    return
+
         if not message.content.startswith("!sherlock"):
             return
 
         if self.agent is None:
-            await message.channel.send("Bot is still initializing, please wait...")
+            await message.channel.send("Bot está inicializando...")
             return
 
         question = message.content.replace("!sherlock", "").strip()
+
+        if not question:
+            await message.channel.send("Por favor, forneça uma pergunta após o comando !sherlock")
+            return
+
         thread_id = f"channel_{message.channel.id}"
 
         async with message.channel.typing():
