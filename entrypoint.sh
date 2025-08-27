@@ -36,13 +36,7 @@ echo "$CLUSTERS" | jq -r 'to_entries[] | "\(.key) \(.value.cluster) \(.value.reg
     if gcloud container clusters get-credentials "$cluster" --project "$project" --region="$region"; then
         echo "✅ Successfully configured access to $cluster in project $project"
     else
-        echo "⚠️ Failed to configure access to $cluster in project $project with region, trying with zone..."
-        zone="${region}-a"
-        if gcloud container clusters get-credentials "$cluster" --project "$project" --zone="$zone"; then
-            echo "✅ Successfully configured access to $cluster in project $project"
-        else
-            echo "❌ Failed to configure access to $cluster in project $project"
-        fi
+        echo "❌ Failed to configure access to $cluster in project $project"
     fi
 done
 
