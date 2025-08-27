@@ -30,6 +30,22 @@ GOOGLE_API_KEY=your_google_api_key_here
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 ```
 
+### DM Whitelist (Optional)
+
+The bot can be configured to accept direct messages only from whitelisted users. Configure the `WHITELIST` environment variable with comma-separated usernames:
+
+- **No WHITELIST**: All DMs are blocked
+- **With WHITELIST**: Only listed users can send DMs
+- **Guild/Server channels**: Always allowed regardless of whitelist
+
+**Example:**
+
+```env
+WHITELIST=admin,developer,support
+```
+
+This allows DMs from users named "admin", "developer", and "support" while blocking all other DM attempts.
+
 ### Service Account Configuration
 
 The bot automatically authenticates with Google Cloud using service account files placed in `/app/sa/`. The service account filenames must follow the pattern:
