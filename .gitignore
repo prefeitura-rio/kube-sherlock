@@ -16,4 +16,4 @@ __pycache__
 CLAUDE.md
 
 # credentials
-sa/*.json
+service-account.json

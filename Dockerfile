@@ -6,7 +6,7 @@ ARG MCP_VERSION=0.0.49
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y apt-transport-https ca-certificates curl tar gnupg lsb-release unzip --no-install-recommends
+RUN apt-get update && apt-get install -y apt-transport-https ca-certificates curl tar gnupg lsb-release unzip jq --no-install-recommends
 
 # install Google Cloud CLI and kubectl
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \

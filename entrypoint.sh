@@ -13,26 +13,35 @@ contexts: []
 users: []
 current-context: \"\"" > /root/.kube/config
 
-echo "🔍 Processing service account files..."
-for file in /app/sa/*.json; do
-    if [ -f "$file" ]; then
-        filename=$(basename "$file" .json)
+echo "🔑 Activating service account..."
+SERVICE_ACCOUNT_FILE="${SERVICE_ACCOUNT_FILE:-/app/service-account.json}"
 
-        if [[ $filename =~ ^(.+)_(.+)_(.+)$ ]]; then
-            project="${BASH_REMATCH[1]}"
-            cluster="${BASH_REMATCH[2]}"
-            zone="${BASH_REMATCH[3]}"
+if [ -f "$SERVICE_ACCOUNT_FILE" ]; then
+    gcloud auth activate-service-account --key-file="$SERVICE_ACCOUNT_FILE"
+    echo "✅ Service account activated successfully"
+else
+    echo "❌ Service account file not found at $SERVICE_ACCOUNT_FILE"
+    exit 1
+fi
 
-            echo "🔑 Activating service account for project: $project, cluster: $cluster, zone: $zone"
+echo "🔍 Processing cluster configurations from CLUSTERS env var..."
+if [ "$CLUSTERS" = "" ]; then
+    echo "❌ CLUSTERS environment variable is not set"
+    exit 1
+fi
 
-            gcloud auth activate-service-account --key-file="$file"
-            gcloud container clusters get-credentials "$cluster" --zone "$zone" --project "$project"
+echo "$CLUSTERS" | jq -r 'to_entries[] | "\(.key) \(.value.cluster) \(.value.region)"' | while read -r project cluster region; do
+    echo "🔗 Configuring access -> cluster: $cluster, project: $project, region: $region"
 
+    if gcloud container clusters get-credentials "$cluster" --project "$project" --region="$region"; then
+        echo "✅ Successfully configured access to $cluster in project $project"
+    else
+        echo "⚠️ Failed to configure access to $cluster in project $project with region, trying with zone..."
+        zone="${region}-a"
+        if gcloud container clusters get-credentials "$cluster" --project "$project" --zone="$zone"; then
             echo "✅ Successfully configured access to $cluster in project $project"
         else
-            echo "⚠️ Warning: filename $filename does not match expected pattern project_cluster_zone"
-
-            gcloud auth activate-service-account --key-file="$file"
+            echo "❌ Failed to configure access to $cluster in project $project"
         fi
     fi
 done
