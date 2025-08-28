@@ -32,4 +32,4 @@ RUN update-ca-certificates && chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["uv", "run", "python", "main.py"]
+CMD ["uv", "run", "opentelemetry-instrument", "python", "main.py"]

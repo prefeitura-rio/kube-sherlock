@@ -9,3 +9,4 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("kube-sherlock")
+logger.addHandler(logging.StreamHandler())

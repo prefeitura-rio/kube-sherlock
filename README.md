@@ -5,8 +5,10 @@ A Discord bot for debugging Kubernetes issues in Brazilian Portuguese. The bot r
 ## Features
 
 - Kubernetes troubleshooting assistance in Portuguese
-- Per-channel conversation memory
+- Per-channel conversation memory with reset capability
 - Powered by Google Gemini AI via LangChain
+- Built-in OpenTelemetry observability and metrics
+- DM whitelist support for controlled access
 
 ## Quick Start
 
@@ -28,6 +30,16 @@ touch .env
 ```env
 GOOGLE_API_KEY=your_google_api_key_here
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
+REDIS_URL=redis://localhost:6379  # For conversation memory
+
+# opentelemetry (optional)
+OTEL_SERVICE_NAME=kube-sherlock
+OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+OTEL_METRICS_EXPORTER=otlp
+OTEL_LOGS_EXPORTER=otlp
+OTEL_TRACES_EXPORTER=none
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+OTEL_EXPORTER_OTLP_INSECURE=true
 ```
 
 ### DM Whitelist (Optional)
@@ -102,6 +114,11 @@ In Discord, use the `!sherlock` command followed by your Kubernetes question:
 ```
 
 The bot will respond with troubleshooting advice in Portuguese, maintaining conversation context per channel.
+
+### Commands
+
+- `!sherlock <question>` - Ask a Kubernetes troubleshooting question
+- `!reset` - Clear conversation memory for the current channel/DM
 
 ## Development Commands
 

@@ -26,6 +26,21 @@ spec:
             limits:
               cpu: "1000m"
               memory: "1024Mi"
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "kube-sherlock"
+            - name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED
+              value: "true"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+            - name: OTEL_TRACES_EXPORTER
+              value: "none"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://signoz-otel-collector.signoz.svc.cluster.local:4317"
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
           envFrom:
             - secretRef:
                 name: kube-sherlock-secrets
