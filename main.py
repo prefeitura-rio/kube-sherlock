@@ -10,7 +10,7 @@ from langgraph.store.redis.aio import AsyncRedisStore
 
 import discord
 from src.agent import create_agent, get_llm_response
-from src.discord import handle_sherlock_message
+from src.discord import MessageState, MessageStateMachine, handle_sherlock_message
 from src.healthcheck import run_http_server
 from src.logger import logger
 from src.mcp import get_mcp_client
@@ -26,6 +26,7 @@ class SherlockBot(discord.Client):
         self.checkpointer = checkpointer
         self.agent: CompiledStateGraph = None
         self.tools: list[BaseTool] = None
+        self.state = MessageStateMachine()
 
     async def on_ready(self):
         logger.info("%s has connected to Discord", self.user)
@@ -41,27 +42,31 @@ class SherlockBot(discord.Client):
         if message.author == self.user:
             return
 
-        match message.channel:
-            case discord.DMChannel():
-                if not settings.whitelisted_users:
-                    await message.channel.send("DMs não estão habilitadas para este bot.")
-                    return
-
-                if message.author.name not in settings.whitelisted_users:
-                    await message.channel.send("Você não tem permissão para usar este bot em DM.")
-                    return
-
-        if not message.content.startswith("!sherlock"):
-            return
-
         if self.agent is None:
             await message.channel.send("Bot está inicializando...")
             return
 
-        question = message.content.replace("!sherlock", "").strip()
+        state = self.state.process_message(message, settings.whitelisted_users)
+
+        match state:
+            case MessageState.DM_MESSAGE_NOT_IN_WHITELIST:
+                await message.channel.send("Você não está autorizado a usar este bot.")
+                return
+            case MessageState.NO_WHITELIST:
+                await message.channel.send("DMs não estão habilitadas para este bot.")
+                return
+            case MessageState.CHANNEL_MESSAGE:
+                if not message.content.startswith("!sherlock"):
+                    return
+
+                question = message.content.replace("!sherlock", "").strip()
+            case MessageState.VALID_DM_MESSAGE:
+                question = message.content.strip()
+            case _:
+                question = None
 
         if not question:
-            await message.channel.send("Por favor, forneça uma pergunta após o comando !sherlock")
+            await message.channel.send("Por favor, forneça uma pergunta após o comando !sherlock.")
             return
 
         thread_id = f"channel_{message.channel.id}"
