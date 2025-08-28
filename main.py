@@ -39,7 +39,7 @@ class SherlockBot(discord.Client):
 
     async def handle_reset_command(self, message: discord.Message, question: str, thread_id: str) -> bool:
         """Handle reset command. Returns True if reset was processed."""
-        if question.startswith("reset"):
+        if question == "!reset":
             try:
                 await self.delete_memory(thread_id)
                 await message.channel.send("✅ Conversa resetada! Histórico apagado.")
