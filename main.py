@@ -99,7 +99,6 @@ class SherlockBot(discord.Client):
         question = await self.process_message(message, state)
 
         if not question:
-            await message.channel.send("Por favor, forneça uma pergunta após o comando !sherlock.")
             return
 
         thread_id = f"channel_{message.channel.id}"
