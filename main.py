@@ -31,7 +31,7 @@ class SherlockBot(discord.Client):
     async def delete_memory(self, thread_id: str):
         """Delete conversation memory for a given thread_id"""
         try:
-            await self.checkpointer.adelete(thread_id)
+            await self.checkpointer.adelete_thread(thread_id)
             logger.info("Successfully deleted memory for thread: %s", thread_id)
         except Exception as e:
             logger.error("Failed to delete memory for thread %s: %s", thread_id, e)
