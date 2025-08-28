@@ -25,7 +25,7 @@ class MessageState(Enum):
 class MessageStateMachine:
     current_state = MessageState.INCOMING_MESSAGE
 
-    def process_message(self, message: discord.Message, whitelisted_users: set[str]) -> MessageState:
+    def process_state(self, message: discord.Message, whitelisted_users: set[str]) -> MessageState:
         logger.debug("Processing message from %s in %s", message.author.name, type(message.channel).__name__)
 
         match message.channel:
