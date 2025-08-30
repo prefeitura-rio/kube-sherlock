@@ -89,4 +89,4 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
         return response.content
     except Exception as e:
         logger.error("Error getting LLM response: %s", str(e))
-        return "I apologize, but I encountered an error processing your request. Please try again."
+        return "Peço desculpas, mas ocorreu um erro ao processar sua solicitação. Por favor, tente novamente."
