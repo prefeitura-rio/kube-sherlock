@@ -5,17 +5,24 @@ PERGUNTA ORIGINAL: {question}
 RESPOSTA PARA REVISAR: {response}
 
 Analise a resposta considerando:
+
 1. **Completude**: A resposta aborda completamente a pergunta?
 2. **Precisão técnica**: As informações e comandos kubectl estão corretos?
 3. **Clareza**: A explicação está clara e em português brasileiro adequado?
 4. **Acionabilidade**: Fornece próximos passos claros para resolver o problema?
-5. **Limite Discord**: Está dentro do limite de 2000 caracteres?
+5. **Uso de ferramentas MCP**: A resposta aproveitou adequadamente as ferramentas MCP disponíveis para obter informações do cluster quando necessário?
+6. **Limite Discord**: Está dentro do limite de 2000 caracteres?
 
-Se a resposta está boa, responda apenas: "APROVADA"
+INSTRUÇÕES DE RESPOSTA:
 
-Se precisa melhorias, forneça uma versão melhorada que:
+Se a resposta está boa e não precisa melhorias, responda EXATAMENTE: "APROVADA"
+
+Se precisa melhorias, forneça APENAS a versão melhorada da resposta (sem explicações sobre as mudanças):
+
 - Corrija problemas técnicos
 - Melhore a clareza
 - Adicione informações importantes que faltam
+- Use ferramentas MCP para obter dados do cluster se necessário
 - Mantenha o tom direto e prático
 - Respeite o limite de caracteres do Discord
+- Responda como se fosse o assistente original falando diretamente com o usuário

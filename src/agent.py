@@ -47,7 +47,7 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
     logger.info("Initializing agent with MCP tools...")
 
     model = init_chat_model(settings.MODEL_NAME, model_provider="google_genai")
-    prompt = await Path("prompts/system.txt").read_text()
+    prompt = await Path("prompts/system.md").read_text()
     prompt = prompt.strip()
 
     if settings.ADDITIONAL_PROMPT:
@@ -74,7 +74,7 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
 async def reflect_on_response(model: BaseChatModel, question: str, response: str, max_iterations: int = 3) -> str:
     """Apply iterative reflection to improve the response quality"""
     try:
-        reflection_prompt = await Path("prompts/reflection.txt").read_text()
+        reflection_prompt = await Path("prompts/reflection.md").read_text()
         current_response = response
 
         for iteration in range(max_iterations):
