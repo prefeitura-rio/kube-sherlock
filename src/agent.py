@@ -111,7 +111,7 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
     try:
         model_response = await agent.ainvoke(
             input={"messages": [{"role": "user", "content": question}]},
-            config=RunnableConfig(configurable={"thread_id": thread_id}),
+            config=RunnableConfig(configurable={"thread_id": thread_id}, recursion_limit=50),
         )
 
         response: ResponseFormat = model_response["structured_response"]
