@@ -74,14 +74,24 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
 async def reflect_on_response(model: BaseChatModel, question: str, response: str, max_iterations: int = 3) -> str:
     """Apply iterative reflection to improve the response quality"""
     try:
+        if not question or not response:
+            logger.warning("Skipping reflection due to empty question or response")
+            return response
+
         reflection_prompt = await Path("prompts/reflection.md").read_text()
         current_response = response
 
         for iteration in range(max_iterations):
             logger.info("Reflection iteration %d/%d", iteration + 1, max_iterations)
 
+            formatted_prompt = reflection_prompt.format(question=question, response=current_response)
+
+            if not formatted_prompt.strip():
+                logger.warning("Formatted reflection prompt is empty, skipping iteration")
+                break
+
             messages = [
-                SystemMessage(content=reflection_prompt.format(question=question, response=current_response)),
+                SystemMessage(content=formatted_prompt),
                 HumanMessage(content="Revise esta resposta conforme os critérios acima."),
             ]
 
@@ -120,6 +130,11 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
 
         logger.info("Initial response: %s ... (truncated)", initial_response[:100])
         logger.info("Initial response length: %d chars", len(initial_response))
+
+        # Skip reflection if initial response is empty
+        if not initial_response or not initial_response.strip():
+            logger.warning("Initial response is empty, skipping reflection")
+            return "Não foi possível gerar uma resposta adequada. Por favor, tente reformular sua pergunta."
 
         model = init_chat_model(settings.MODEL_NAME, model_provider="google_genai")
 
