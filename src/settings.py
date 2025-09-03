@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     KUBECONFIG_PATH: str = "/root/.kube/config"
     MAX_WAIT: int = 30
     SUMMARIZATION_MAX_TOKENS: int = 512
+    AGENT_TIMEOUT: int = 60 * 5
+    RECURSION_LIMIT: int = 50
 
     @property
     def whitelisted_users(self) -> set[str]:

@@ -1,3 +1,5 @@
+import asyncio
+
 from anyio import Path
 from langchain.chat_models import init_chat_model
 from langchain.chat_models.base import BaseChatModel
@@ -55,18 +57,25 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
 
     logger.info("Loaded %d MCP tools", len(tools))
 
-    agent = create_react_agent(
-        model=model,
-        prompt=prompt,
-        tools=tools,
-        checkpointer=checkpointer,
-        store=store,
-        response_format=ResponseFormat,
-        pre_model_hook=pre_model_hook(model),
-        state_schema=State,
-    )
+    try:
+        agent = create_react_agent(
+            model=model,
+            prompt=prompt,
+            tools=tools,
+            checkpointer=checkpointer,
+            store=store,
+            response_format=ResponseFormat,
+            pre_model_hook=pre_model_hook(model),
+            state_schema=State,
+        )
 
-    logger.info("Agent created successfully.")
+        logger.info("Agent created successfully.")
+        logger.info("Response format class: %s", ResponseFormat)
+        logger.info("Response format fields: %s", list(ResponseFormat.model_fields.keys()))
+
+    except Exception as e:
+        logger.error("Failed to create agent: %s", str(e))
+        raise
 
     return agent
 
@@ -119,19 +128,34 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
     logger.info("Session ID: %s", thread_id)
 
     try:
-        model_response = await agent.ainvoke(
-            input={"messages": [{"role": "user", "content": question}]},
-            config=RunnableConfig(configurable={"thread_id": thread_id}, recursion_limit=50),
+        logger.info("Agent input - Question: %s", question)
+
+        config = RunnableConfig(
+            configurable={"thread_id": thread_id},
+            recursion_limit=settings.RECURSION_LIMIT,
         )
+
+        model_response = await asyncio.wait_for(
+            agent.ainvoke(
+                input={"messages": [{"role": "user", "content": question}]},
+                config=config,
+            ),
+            timeout=settings.AGENT_TIMEOUT,
+        )
+
+        logger.info("Raw model response keys: %s", list(model_response.keys()))
+
+        if "structured_response" not in model_response:
+            logger.error("No `structured_response` in model response: %s", model_response)
+            return "Erro interno: resposta estruturada não encontrada."
 
         response: ResponseFormat = model_response["structured_response"]
 
-        initial_response = response.content
+        initial_response = response.content if response else ""
 
         logger.info("Initial response: %s ... (truncated)", initial_response[:100])
         logger.info("Initial response length: %d chars", len(initial_response))
 
-        # Skip reflection if initial response is empty
         if not initial_response or not initial_response.strip():
             logger.warning("Initial response is empty, skipping reflection")
             return "Não foi possível gerar uma resposta adequada. Por favor, tente reformular sua pergunta."
