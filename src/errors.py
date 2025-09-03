@@ -17,41 +17,13 @@ class KubeSherlockError(Exception):
 
 class AgentError(KubeSherlockError):
     """Errors related to agent operations"""
-    pass
 
-
-class AgentTimeoutError(AgentError):
-    """Agent operation timed out"""
     pass
 
 
 class InvalidResponseError(AgentError):
     """Agent returned invalid or empty response"""
-    pass
 
-
-class PlanningError(KubeSherlockError):
-    """Errors related to planning operations"""
-    pass
-
-
-class ReflectionError(KubeSherlockError):
-    """Errors related to reflection operations"""
-    pass
-
-
-class DiscordError(KubeSherlockError):
-    """Errors related to Discord operations"""
-    pass
-
-
-class ValidationError(KubeSherlockError):
-    """Errors related to validation"""
-    pass
-
-
-class ConfigurationError(KubeSherlockError):
-    """Errors related to configuration"""
     pass
 
 
@@ -62,4 +34,3 @@ class AgentErrorMessages(Enum):
     EMPTY_RESPONSE = "Não foi possível gerar uma resposta adequada. Por favor, tente reformular sua pergunta."
     PROCESSING_REQUEST = "Peço desculpas, mas ocorreu um erro ao processar sua solicitação. Por favor, tente novamente."
     REFLECTION_ERROR = "Erro durante o processo de reflexão, retornando resposta original."
-

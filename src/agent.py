@@ -22,10 +22,37 @@ from .utils import extract_response_content, invoke_agent
 
 system_prompt = Path("prompts/system.md").read_text().strip()
 reflection_template = Template((Path("prompts/reflection.md")).read_text())
+planning_decision_template = Template((Path("prompts/planning-decision.md")).read_text())
 
 
-def should_use_planning(question: str) -> bool:
-    """Determine if a question would benefit from step-by-step planning"""
+async def should_use_planning_llm(question: str) -> bool:
+    """Let the LLM decide if step-by-step planning is needed."""
+    try:
+        model = create_model()
+
+        prompt_content = planning_decision_template.substitute(question=question)
+
+        messages = [
+            SystemMessage(content=prompt_content),
+            HumanMessage(content="Analise esta pergunta e responda apenas: PLANNING ou DIRECT"),
+        ]
+
+        response = await model.ainvoke(messages)
+        decision = str(response.content).strip().upper()
+
+        use_planning = "PLANNING" in decision
+        logger.info("LLM planning decision for '%s': %s", question[:50], "PLANNING" if use_planning else "DIRECT")
+
+        return use_planning
+
+    except Exception as e:
+        logger.error("Failed to get LLM planning decision: %s", str(e))
+        logger.info("Falling back to heuristic planning decision")
+        return should_use_planning_heuristic(question)
+
+
+def should_use_planning_heuristic(question: str) -> bool:
+    """Fallback heuristic-based planning decision."""
     question_lower = question.lower()
 
     has_planning_keywords = any(keyword in question_lower for keyword in settings.planning_keywords)
@@ -138,7 +165,15 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
     logger.info("Received question: %s", question)
     logger.info("Session ID: %s", thread_id)
 
-    if use_planning and settings.ENABLE_STEP_PLANNING and should_use_planning(question):
+    planning_needed = False
+
+    if use_planning and settings.ENABLE_STEP_PLANNING:
+        if settings.USE_LLM_PLANNING_DECISION:
+            planning_needed = await should_use_planning_llm(question)
+        else:
+            planning_needed = should_use_planning_heuristic(question)
+
+    if planning_needed:
         logger.info("Using step-by-step planning for complex question")
 
         try:

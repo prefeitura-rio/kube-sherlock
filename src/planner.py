@@ -212,7 +212,13 @@ async def convert_to_conversational_response(technical_report: str) -> str:
 
         messages = [
             SystemMessage(content=prompt_content),
-            HumanMessage(content="Converta este relatório técnico em uma resposta conversacional amigável."),
+            HumanMessage(
+                content=(
+                    "Reescreva esse relatório como se fosse uma conversa natural no Discord. "
+                    "NUNCA use formato de relatório com seções, emojis estruturais ou listas. "
+                    "Seja casual e direto como uma pessoa falando."
+                )
+            ),
         ]
 
         response = await model.ainvoke(messages)
@@ -223,7 +229,14 @@ async def convert_to_conversational_response(technical_report: str) -> str:
             logger.warning("Conversational rewrite returned empty response, using technical report")
             return technical_report
 
-        logger.info("Successfully converted technical report to conversational response")
+        logger.info(
+            "Conversational rewrite - Input length: %d, Output length: %d",
+            len(technical_report),
+            len(conversational_response),
+        )
+        logger.debug("Conversational rewrite - Input preview: %s", technical_report[:200])
+        logger.debug("Conversational rewrite - Output preview: %s", conversational_response[:200])
+
         return conversational_response
 
     except Exception as e:
