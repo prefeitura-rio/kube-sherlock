@@ -1,9 +1,11 @@
+import asyncio
+
 from langchain.chat_models import init_chat_model
 from langchain.chat_models.base import BaseChatModel
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 
-from .agent import AgentError
+from .errors import AgentError
 from .logger import logger
 from .settings import settings
 
@@ -24,9 +26,12 @@ async def get_basic_llm_response(agent: CompiledStateGraph, question: str, threa
             recursion_limit=settings.RECURSION_LIMIT,
         )
 
-        model_response = await agent.ainvoke(
-            input={"messages": [{"role": "user", "content": question}]},
-            config=config,
+        model_response = await asyncio.wait_for(
+            agent.ainvoke(
+                input={"messages": [{"role": "user", "content": question}]},
+                config=config,
+            ),
+            timeout=settings.AGENT_TIMEOUT,
         )
 
         logger.info("Raw model response keys: %s", list(model_response.keys()))

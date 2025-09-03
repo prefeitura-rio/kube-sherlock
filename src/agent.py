@@ -1,5 +1,4 @@
 import asyncio
-from enum import Enum
 from pathlib import Path
 from string import Template
 
@@ -16,18 +15,11 @@ from langgraph.store.base import BaseStore
 from langmem.short_term import RunningSummary, SummarizationNode
 from pydantic import BaseModel
 
+from .errors import AgentError
 from .llm import create_model
 from .logger import logger
 from .planner import create_execution_plan, execute_plan, render_plan_result
 from .settings import settings
-
-
-class AgentError(Enum):
-    """Standardized error messages for the agent"""
-    STRUCTURED_RESPONSE_NOT_FOUND = "Erro interno: resposta estruturada não encontrada."
-    EMPTY_RESPONSE = "Não foi possível gerar uma resposta adequada. Por favor, tente reformular sua pergunta."
-    PROCESSING_REQUEST = "Peço desculpas, mas ocorreu um erro ao processar sua solicitação. Por favor, tente novamente."
-    REFLECTION_ERROR = "Erro durante o processo de reflexão, retornando resposta original."
 
 system_prompt = Path("prompts/system.md").read_text().strip()
 reflection_template = Template((Path("prompts/reflection.md")).read_text())
@@ -194,9 +186,9 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
             logger.warning("Initial response is empty, skipping reflection")
             return AgentError.EMPTY_RESPONSE.value
 
-        model = create_model()
+        reflection_model = create_model()
 
-        final_response = await reflect_on_response(model, question, initial_response)
+        final_response = await reflect_on_response(reflection_model, question, initial_response)
 
         logger.info("Final response length: %d chars", len(final_response))
 
