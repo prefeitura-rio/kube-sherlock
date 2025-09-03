@@ -18,7 +18,9 @@ RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -
 # install k8s MCP server
 RUN curl -L https://github.com/containers/kubernetes-mcp-server/releases/download/v${MCP_VERSION}/kubernetes-mcp-server-linux-amd64 -o /usr/local/bin/kubernetes-mcp-server && chmod +x /usr/local/bin/kubernetes-mcp-server
 
-COPY pyproject.toml uv.lock main.py system-prompt.txt .
+COPY pyproject.toml uv.lock main.py .
+
+COPY prompts prompts
 
 COPY src src
 
