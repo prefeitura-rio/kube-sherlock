@@ -10,7 +10,8 @@ from langgraph.store.redis.aio import AsyncRedisStore
 
 import discord
 from src.agent import create_agent, get_llm_response
-from src.discord import MessageState, MessageStateMachine, handle_sherlock_message
+from src.constants import MessageState, constants
+from src.discord import MessageStateMachine, handle_sherlock_message
 from src.healthcheck import run_http_server
 from src.logger import logger
 from src.mcp import get_mcp_client
@@ -39,19 +40,19 @@ class SherlockBot(discord.Client):
 
     async def handle_reset_command(self, message: discord.Message, question: str, thread_id: str) -> bool:
         """Handle reset command. Returns True if reset was processed."""
-        if question == "!reset":
+        if question == constants.RESET_COMMAND:
             try:
                 await self.delete_memory(thread_id)
-                await message.channel.send("✅ Conversa resetada! Histórico apagado.")
+                await message.channel.send(constants.RESET_SUCCESS_MESSAGE)
             except Exception as e:
-                await message.channel.send(f"❌ Erro ao resetar conversa. Erro: {e}")
+                await message.channel.send(constants.RESET_ERROR_MESSAGE.format(error=e))
             return True
         return False
 
     async def process_llm_question(self, message: discord.Message, question: str, thread_id: str):
         """Process question through LLM and send response"""
         if not self.agent:
-            await message.channel.send("Bot está inicializando...")
+            await message.channel.send(constants.AGENT_INITIALIZING_MESSAGE)
             return
 
         async with message.channel.typing():
@@ -67,15 +68,15 @@ class SherlockBot(discord.Client):
         """Process message based on its state and extract question if valid"""
         match state:
             case MessageState.DM_MESSAGE_NOT_IN_WHITELIST:
-                await message.channel.send("Você não está autorizado a usar este bot.")
+                await message.channel.send(constants.WHITELIST_DENIED_MESSAGE)
                 return None
             case MessageState.NO_WHITELIST:
-                await message.channel.send("DMs não estão habilitadas para este bot.")
+                await message.channel.send(constants.DM_DISABLED_MESSAGE)
                 return None
             case MessageState.CHANNEL_MESSAGE:
-                if not message.content.startswith("!sherlock"):
+                if not message.content.startswith(constants.SHERLOCK_COMMAND):
                     return None
-                return message.content.replace("!sherlock", "").strip()
+                return message.content.replace(constants.SHERLOCK_COMMAND, "").strip()
             case MessageState.VALID_DM_MESSAGE:
                 return message.content.strip()
             case _:
@@ -101,7 +102,7 @@ class SherlockBot(discord.Client):
             return
 
         if self.agent is None:
-            await message.channel.send("Bot está inicializando...")
+            await message.channel.send(constants.AGENT_INITIALIZING_MESSAGE)
             return
 
         state = self.state.process_state(message, settings.whitelisted_users)

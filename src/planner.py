@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 
+from .constants import constants
 from .llm import create_model, get_basic_llm_response
 from .logger import logger
 
@@ -154,10 +155,15 @@ async def execute_plan(agent: CompiledStateGraph, plan: ExecutionPlan, thread_id
     for step in plan.steps:
         if has_unsatisfied_dependencies(step, results):
             missing_deps = [dep for dep in step.depends_on if dep not in results]
+
             logger.warning(
-                "Step %d (%s) dependencies not satisfied, missing: %s", step.id, step.description, missing_deps
+                "Step %d (%s) dependencies not satisfied, missing: %s",
+                step.id,
+                step.description,
+                missing_deps,
             )
-            step_results.append(create_step_result(step, "Dependências não satisfeitas", False))
+
+            step_results.append(create_step_result(step, constants.DEPENDENCY_ERROR_MESSAGE, False))
             continue
 
         try:
@@ -166,7 +172,7 @@ async def execute_plan(agent: CompiledStateGraph, plan: ExecutionPlan, thread_id
             step_results.append(create_step_result(step, result, True))
         except Exception as e:
             logger.error("Step %d (%s) failed: %s", step.id, step.description, str(e))
-            error_msg = f"Erro na execução: {e!s}"
+            error_msg = f"{constants.EXECUTION_ERROR_PREFIX}{e!s}"
             results[step.id] = error_msg
             step_results.append(create_step_result(step, error_msg, False))
 
@@ -183,9 +189,11 @@ async def execute_plan(agent: CompiledStateGraph, plan: ExecutionPlan, thread_id
 
 async def render_plan_result(plan_result: PlanExecutionResult) -> str:
     """Render plan execution result using template"""
-    step_outputs = [
-        f"{'✅' if sr.success else '❌'} **{sr.description}**\n{sr.result}" for sr in plan_result.step_results
-    ]
+    step_outputs = []
+
+    for sr in plan_result.step_results:
+        emoji = constants.STEP_SUCCESS_EMOJI if sr.success else constants.STEP_FAILURE_EMOJI
+        step_outputs.append(f"{emoji} **{sr.description}**\n{sr.result}")
 
     return plan_result_template.substitute(
         summary=plan_result.summary,

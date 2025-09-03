@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING
 
 import discord
@@ -7,18 +6,9 @@ import discord
 if TYPE_CHECKING:
     from discord.abc import Messageable, MessageableChannel
 
+from .constants import MessageState, constants
 from .logger import logger
 from .utils import split_content
-
-DISCORD_CHAR_LIMIT = 2000
-
-
-class MessageState(Enum):
-    INCOMING_MESSAGE = "incoming_message"
-    CHANNEL_MESSAGE = "channel_message"
-    DM_MESSAGE_NOT_IN_WHITELIST = "dm_message_not_in_whitelist"
-    NO_WHITELIST = "no_whitelist"
-    VALID_DM_MESSAGE = "valid_dm_message"
 
 
 @dataclass
@@ -67,7 +57,7 @@ class MessageStateMachine:
                 return self.current_state
 
 
-async def send_long_message(channel: "Messageable", content: str, max_length: int = DISCORD_CHAR_LIMIT):
+async def send_long_message(channel: "Messageable", content: str, max_length: int = constants.DISCORD_CHAR_LIMIT):
     """Send a long message in chunks to avoid Discord's character limit."""
     chunks = split_content(content, max_length)
 
@@ -78,7 +68,7 @@ async def send_long_message(channel: "Messageable", content: str, max_length: in
 
 async def handle_sherlock_message(channel: "MessageableChannel", response: str):
     """Handle a !sherlock command message with pre-generated response"""
-    if len(response) < DISCORD_CHAR_LIMIT:
+    if len(response) < constants.DISCORD_CHAR_LIMIT:
         logger.info("Sending single message (under limit)")
         await channel.send(response)
         return

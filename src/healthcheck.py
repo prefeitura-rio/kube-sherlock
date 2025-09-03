@@ -1,5 +1,7 @@
 from aiohttp import web
 
+from .constants import constants
+
 routes = web.RouteTableDef()
 
 
@@ -9,7 +11,10 @@ async def health(_: web.Request) -> web.Response:
     return web.json_response({"status": "healthy"})
 
 
-async def run_http_server(host: str = "0.0.0.0", port: int = 8080):
+async def run_http_server(
+    host: str = constants.DEFAULT_HEALTH_HOST,
+    port: int = constants.DEFAULT_HEALTH_PORT,
+):
     """Run the simple health check server."""
     app = web.Application()
 

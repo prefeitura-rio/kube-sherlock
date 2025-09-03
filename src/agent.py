@@ -1,11 +1,9 @@
-import asyncio
 from pathlib import Path
 from string import Template
 
 from langchain.chat_models.base import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.utils import count_tokens_approximately
-from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
@@ -15,11 +13,12 @@ from langgraph.store.base import BaseStore
 from langmem.short_term import RunningSummary, SummarizationNode
 from pydantic import BaseModel
 
-from .errors import AgentError
+from .errors import AgentErrorMessages
 from .llm import create_model
 from .logger import logger
 from .planner import create_execution_plan, execute_plan, render_plan_result
 from .settings import settings
+from .utils import extract_response_content, invoke_agent
 
 system_prompt = Path("prompts/system.md").read_text().strip()
 reflection_template = Template((Path("prompts/reflection.md")).read_text())
@@ -130,7 +129,7 @@ async def reflect_on_response(model: BaseChatModel, question: str, response: str
         return current_response
     except Exception as e:
         logger.error("Error in reflection step: %s", str(e))
-        logger.info(AgentError.REFLECTION_ERROR.value)
+        logger.info(AgentErrorMessages.REFLECTION_ERROR.value)
         return response
 
 
@@ -154,45 +153,21 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
             logger.info("Falling back to direct execution")
 
     try:
-        logger.info("Agent input - Question: %s", question)
+        model_response = await invoke_agent(agent, question, thread_id)
+        initial_response = extract_response_content(model_response)
 
-        config = RunnableConfig(
-            configurable={"thread_id": thread_id},
-            recursion_limit=settings.RECURSION_LIMIT,
-        )
-
-        model_response = await asyncio.wait_for(
-            agent.ainvoke(
-                input={"messages": [{"role": "user", "content": question}]},
-                config=config,
-            ),
-            timeout=settings.AGENT_TIMEOUT,
-        )
-
-        logger.info("Raw model response keys: %s", list(model_response.keys()))
-
-        if "structured_response" not in model_response:
-            logger.error("No `structured_response` in model response: %s", model_response)
-            return AgentError.STRUCTURED_RESPONSE_NOT_FOUND.value
-
-        response: ResponseFormat = model_response["structured_response"]
-
-        initial_response = response.content if response else ""
-
-        logger.info("Initial response: %s ... (truncated)", initial_response[: settings.LOG_TRUNCATE_LENGTH])
-        logger.info("Initial response length: %d chars", len(initial_response))
-
-        if not initial_response or not initial_response.strip():
-            logger.warning("Initial response is empty, skipping reflection")
-            return AgentError.EMPTY_RESPONSE.value
+        error_responses = [
+            AgentErrorMessages.EMPTY_RESPONSE.value,
+            AgentErrorMessages.STRUCTURED_RESPONSE_NOT_FOUND.value,
+        ]
+        if initial_response in error_responses:
+            return initial_response
 
         reflection_model = create_model()
-
         final_response = await reflect_on_response(reflection_model, question, initial_response)
 
         logger.info("Final response length: %d chars", len(final_response))
-
         return final_response
     except Exception as e:
         logger.error("Error getting LLM response: %s", str(e))
-        return AgentError.PROCESSING_REQUEST.value
+        return AgentErrorMessages.PROCESSING_REQUEST.value
