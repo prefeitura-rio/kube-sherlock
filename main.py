@@ -1,8 +1,8 @@
 import asyncio
 import sys
-from pathlib import Path
 
 import uvloop
+from anyio import Path
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph.state import CompiledStateGraph
@@ -24,8 +24,8 @@ class SherlockBot(discord.Client):
         self.client = get_mcp_client()
         self.store = store
         self.checkpointer = checkpointer
-        self.agent: CompiledStateGraph = None
-        self.tools: list[BaseTool] = None
+        self.agent: CompiledStateGraph | None = None
+        self.tools: list[BaseTool] | None = None
         self.state = MessageStateMachine()
 
     async def delete_memory(self, thread_id: str):
@@ -50,6 +50,10 @@ class SherlockBot(discord.Client):
 
     async def process_llm_question(self, message: discord.Message, question: str, thread_id: str):
         """Process question through LLM and send response"""
+        if not self.agent:
+            await message.channel.send("Bot está inicializando...")
+            return
+
         async with message.channel.typing():
             response = await get_llm_response(
                 agent=self.agent,
@@ -131,7 +135,7 @@ async def main():
         sys.exit(1)
 
     for attempt in range(settings.MAX_WAIT):
-        if Path(settings.KUBECONFIG_PATH).exists():
+        if await Path(settings.KUBECONFIG_PATH).exists():
             logger.info("Kubeconfig found at %s", settings.KUBECONFIG_PATH)
             break
 

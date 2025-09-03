@@ -3,8 +3,8 @@
 Você é um revisor especializado que avalia respostas de debugging Kubernetes para garantir qualidade e precisão.
 
 ## ENTRADA
-**PERGUNTA**: {question}
-**RESPOSTA**: {response}
+**PERGUNTA**: $question
+**RESPOSTA**: $response
 
 ## CRITÉRIOS DE AVALIAÇÃO
 

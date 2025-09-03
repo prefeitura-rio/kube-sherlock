@@ -1,7 +1,7 @@
 import asyncio
+from pathlib import Path
+from string import Template
 
-from anyio import Path
-from langchain.chat_models import init_chat_model
 from langchain.chat_models.base import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.utils import count_tokens_approximately
@@ -15,8 +15,24 @@ from langgraph.store.base import BaseStore
 from langmem.short_term import RunningSummary, SummarizationNode
 from pydantic import BaseModel
 
+from .llm import create_model
 from .logger import logger
+from .planner import create_execution_plan, execute_plan, render_plan_result
 from .settings import settings
+
+system_prompt = Path("prompts/system.md").read_text().strip()
+reflection_template = Template((Path("prompts/reflection.md")).read_text())
+
+
+def should_use_planning(question: str) -> bool:
+    """Determine if a question would benefit from step-by-step planning"""
+    question_lower = question.lower()
+
+    has_planning_keywords = any(keyword in question_lower for keyword in settings.planning_keywords)
+    has_complex_patterns = any(pattern in question_lower for pattern in settings.planning_patterns)
+    is_long_question = len(question.split()) > settings.LONG_QUESTION_WORD_THRESHOLD
+
+    return has_planning_keywords or has_complex_patterns or is_long_question
 
 
 class ResponseFormat(BaseModel):
@@ -48,19 +64,14 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
     """Create and configure the LangGraph agent with MCP tools"""
     logger.info("Initializing agent with MCP tools...")
 
-    model = init_chat_model(settings.MODEL_NAME, model_provider="google_genai")
-    prompt = await Path("prompts/system.md").read_text()
-    prompt = prompt.strip()
-
-    if settings.ADDITIONAL_PROMPT:
-        prompt = f"{prompt}\n\n{settings.ADDITIONAL_PROMPT}"
+    model = create_model()
 
     logger.info("Loaded %d MCP tools", len(tools))
 
     try:
         agent = create_react_agent(
             model=model,
-            prompt=prompt,
+            prompt=system_prompt,
             tools=tools,
             checkpointer=checkpointer,
             store=store,
@@ -80,20 +91,19 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
     return agent
 
 
-async def reflect_on_response(model: BaseChatModel, question: str, response: str, max_iterations: int = 3) -> str:
+async def reflect_on_response(model: BaseChatModel, question: str, response: str) -> str:
     """Apply iterative reflection to improve the response quality"""
     try:
         if not question or not response:
             logger.warning("Skipping reflection due to empty question or response")
             return response
 
-        reflection_prompt = await Path("prompts/reflection.md").read_text()
         current_response = response
 
-        for iteration in range(max_iterations):
-            logger.info("Reflection iteration %d/%d", iteration + 1, max_iterations)
+        for iteration in range(settings.REFLECTION_ITERATIONS):
+            logger.info("Reflection iteration %d/%d", iteration + 1, settings.REFLECTION_ITERATIONS)
 
-            formatted_prompt = reflection_prompt.format(question=question, response=current_response)
+            formatted_prompt = reflection_template.substitute(question=question, response=current_response)
 
             if not formatted_prompt.strip():
                 logger.warning("Formatted reflection prompt is empty, skipping iteration")
@@ -105,7 +115,7 @@ async def reflect_on_response(model: BaseChatModel, question: str, response: str
             ]
 
             reflection_response = await model.ainvoke(messages)
-            reflection_content = reflection_response.content.strip()
+            reflection_content = str(reflection_response.content).strip()
 
             if reflection_content == "APROVADA":
                 logger.info("Response approved by reflection after %d iterations", iteration + 1)
@@ -114,7 +124,7 @@ async def reflect_on_response(model: BaseChatModel, question: str, response: str
             logger.info("Response improved in iteration %d", iteration + 1)
             current_response = reflection_content
 
-        logger.info("Reflection completed after max iterations (%d)", max_iterations)
+        logger.info("Reflection completed after max iterations (%d)", settings.REFLECTION_ITERATIONS)
 
         return current_response
     except Exception as e:
@@ -122,10 +132,24 @@ async def reflect_on_response(model: BaseChatModel, question: str, response: str
         return response
 
 
-async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: str) -> str:
+async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: str, use_planning: bool = True) -> str:
     """Get response from LLM for a given question and session"""
     logger.info("Received question: %s", question)
     logger.info("Session ID: %s", thread_id)
+
+    if use_planning and settings.ENABLE_STEP_PLANNING and should_use_planning(question):
+        logger.info("Using step-by-step planning for complex question")
+
+        try:
+            plan = await create_execution_plan(question)
+            logger.info("Created plan with %d steps", len(plan.steps))
+
+            plan_result = await execute_plan(agent, plan, thread_id)
+
+            return await render_plan_result(plan_result)
+        except Exception as e:
+            logger.error("Planning execution failed: %s", str(e))
+            logger.info("Falling back to direct execution")
 
     try:
         logger.info("Agent input - Question: %s", question)
@@ -153,14 +177,14 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
 
         initial_response = response.content if response else ""
 
-        logger.info("Initial response: %s ... (truncated)", initial_response[:100])
+        logger.info("Initial response: %s ... (truncated)", initial_response[: settings.LOG_TRUNCATE_LENGTH])
         logger.info("Initial response length: %d chars", len(initial_response))
 
         if not initial_response or not initial_response.strip():
             logger.warning("Initial response is empty, skipping reflection")
             return "Não foi possível gerar uma resposta adequada. Por favor, tente reformular sua pergunta."
 
-        model = init_chat_model(settings.MODEL_NAME, model_provider="google_genai")
+        model = create_model()
 
         final_response = await reflect_on_response(model, question, initial_response)
 
