@@ -3,6 +3,7 @@ from langchain.chat_models.base import BaseChatModel
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 
+from .agent import AgentError
 from .logger import logger
 from .settings import settings
 
@@ -32,7 +33,7 @@ async def get_basic_llm_response(agent: CompiledStateGraph, question: str, threa
 
         if "structured_response" not in model_response:
             logger.error("No `structured_response` in model response: %s", model_response)
-            return "Erro interno: resposta estruturada não encontrada."
+            return AgentError.STRUCTURED_RESPONSE_NOT_FOUND.value
 
         response = model_response["structured_response"]
         initial_response = response.content if response else ""
@@ -42,10 +43,10 @@ async def get_basic_llm_response(agent: CompiledStateGraph, question: str, threa
 
         if not initial_response or not initial_response.strip():
             logger.warning("Initial response is empty")
-            return "Não foi possível gerar uma resposta adequada. Por favor, tente reformular sua pergunta."
+            return AgentError.EMPTY_RESPONSE.value
 
         return initial_response
     except Exception as e:
         logger.error("Error getting basic LLM response: %s", str(e))
-        return "Peço desculpas, mas ocorreu um erro ao processar sua solicitação. Por favor, tente novamente."
+        return AgentError.PROCESSING_REQUEST.value
 

@@ -1,4 +1,5 @@
 import asyncio
+from enum import Enum
 from pathlib import Path
 from string import Template
 
@@ -19,6 +20,14 @@ from .llm import create_model
 from .logger import logger
 from .planner import create_execution_plan, execute_plan, render_plan_result
 from .settings import settings
+
+
+class AgentError(Enum):
+    """Standardized error messages for the agent"""
+    STRUCTURED_RESPONSE_NOT_FOUND = "Erro interno: resposta estruturada não encontrada."
+    EMPTY_RESPONSE = "Não foi possível gerar uma resposta adequada. Por favor, tente reformular sua pergunta."
+    PROCESSING_REQUEST = "Peço desculpas, mas ocorreu um erro ao processar sua solicitação. Por favor, tente novamente."
+    REFLECTION_ERROR = "Erro durante o processo de reflexão, retornando resposta original."
 
 system_prompt = Path("prompts/system.md").read_text().strip()
 reflection_template = Template((Path("prompts/reflection.md")).read_text())
@@ -129,6 +138,7 @@ async def reflect_on_response(model: BaseChatModel, question: str, response: str
         return current_response
     except Exception as e:
         logger.error("Error in reflection step: %s", str(e))
+        logger.info(AgentError.REFLECTION_ERROR.value)
         return response
 
 
@@ -171,7 +181,7 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
 
         if "structured_response" not in model_response:
             logger.error("No `structured_response` in model response: %s", model_response)
-            return "Erro interno: resposta estruturada não encontrada."
+            return AgentError.STRUCTURED_RESPONSE_NOT_FOUND.value
 
         response: ResponseFormat = model_response["structured_response"]
 
@@ -182,7 +192,7 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
 
         if not initial_response or not initial_response.strip():
             logger.warning("Initial response is empty, skipping reflection")
-            return "Não foi possível gerar uma resposta adequada. Por favor, tente reformular sua pergunta."
+            return AgentError.EMPTY_RESPONSE.value
 
         model = create_model()
 
@@ -193,4 +203,4 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
         return final_response
     except Exception as e:
         logger.error("Error getting LLM response: %s", str(e))
-        return "Peço desculpas, mas ocorreu um erro ao processar sua solicitação. Por favor, tente novamente."
+        return AgentError.PROCESSING_REQUEST.value
