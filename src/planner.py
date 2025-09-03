@@ -14,6 +14,7 @@ from .logger import logger
 planner_template = Template((Path("prompts/planner.md")).read_text())
 step_execution_template = Template((Path("prompts/step-execution.md")).read_text())
 plan_result_template = Template((Path("prompts/plan-result.md")).read_text())
+conversational_rewrite_template = Template((Path("prompts/conversational-rewrite.md")).read_text())
 
 
 class Step(BaseModel):
@@ -200,3 +201,32 @@ async def render_plan_result(plan_result: PlanExecutionResult) -> str:
         step_outputs="\n\n".join(step_outputs),
         total_steps=plan_result.total_steps,
     )
+
+
+async def convert_to_conversational_response(technical_report: str) -> str:
+    """Convert technical diagnostic report to conversational Discord message."""
+    try:
+        model = create_model()
+
+        prompt_content = conversational_rewrite_template.substitute(technical_report=technical_report)
+
+        messages = [
+            SystemMessage(content=prompt_content),
+            HumanMessage(content="Converta este relatório técnico em uma resposta conversacional amigável."),
+        ]
+
+        response = await model.ainvoke(messages)
+
+        conversational_response = str(response.content).strip()
+
+        if not conversational_response:
+            logger.warning("Conversational rewrite returned empty response, using technical report")
+            return technical_report
+
+        logger.info("Successfully converted technical report to conversational response")
+        return conversational_response
+
+    except Exception as e:
+        logger.error("Failed to convert to conversational response: %s", str(e))
+        logger.info("Falling back to technical report")
+        return technical_report

@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from .errors import AgentErrorMessages
 from .llm import create_model
 from .logger import logger
-from .planner import create_execution_plan, execute_plan, render_plan_result
+from .planner import convert_to_conversational_response, create_execution_plan, execute_plan, render_plan_result
 from .settings import settings
 from .utils import extract_response_content, invoke_agent
 
@@ -147,7 +147,11 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
 
             plan_result = await execute_plan(agent, plan, thread_id)
 
-            return await render_plan_result(plan_result)
+            technical_report = await render_plan_result(plan_result)
+
+            conversational_response = await convert_to_conversational_response(technical_report)
+
+            return conversational_response
         except Exception as e:
             logger.error("Planning execution failed: %s", str(e))
             logger.info("Falling back to direct execution")
