@@ -1,6 +1,3 @@
-from pathlib import Path
-from string import Template
-
 from langchain.chat_models.base import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.utils import count_tokens_approximately
@@ -18,11 +15,12 @@ from .llm import create_model
 from .logger import logger
 from .planner import convert_to_conversational_response, create_execution_plan, execute_plan, render_plan_result
 from .settings import settings
+from .templates import load_prompt_template, load_prompt_text
 from .utils import extract_response_content, invoke_agent
 
-system_prompt = Path("prompts/system.md").read_text().strip()
-reflection_template = Template((Path("prompts/reflection.md")).read_text())
-planning_decision_template = Template((Path("prompts/planning-decision.md")).read_text())
+system_prompt = load_prompt_text("system.md")
+reflection_template = load_prompt_template("reflection.md")
+planning_decision_template = load_prompt_template("planning-decision.md")
 
 
 async def should_use_planning_llm(question: str) -> bool:

@@ -1,6 +1,4 @@
 import uuid
-from pathlib import Path
-from string import Template
 from typing import List
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -10,11 +8,12 @@ from pydantic import BaseModel
 from .constants import constants
 from .llm import create_model, get_basic_llm_response
 from .logger import logger
+from .templates import load_prompt_template
 
-planner_template = Template((Path("prompts/planner.md")).read_text())
-step_execution_template = Template((Path("prompts/step-execution.md")).read_text())
-plan_result_template = Template((Path("prompts/plan-result.md")).read_text())
-conversational_rewrite_template = Template((Path("prompts/conversational-rewrite.md")).read_text())
+planner_template = load_prompt_template("planner.md")
+step_execution_template = load_prompt_template("step-execution.md")
+plan_result_template = load_prompt_template("plan-result.md")
+conversational_rewrite_template = load_prompt_template("conversational-rewrite.md")
 
 
 class Step(BaseModel):
