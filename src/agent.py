@@ -1,6 +1,7 @@
 from anyio import Path
 from langchain.chat_models import init_chat_model
 from langchain.chat_models.base import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.utils import count_tokens_approximately
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
@@ -46,7 +47,7 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
     logger.info("Initializing agent with MCP tools...")
 
     model = init_chat_model(settings.MODEL_NAME, model_provider="google_genai")
-    prompt = await Path("system-prompt.txt").read_text()
+    prompt = await Path("prompts/system.txt").read_text()
     prompt = prompt.strip()
 
     if settings.ADDITIONAL_PROMPT:
@@ -70,6 +71,38 @@ async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tool
     return agent
 
 
+async def reflect_on_response(model: BaseChatModel, question: str, response: str, max_iterations: int = 3) -> str:
+    """Apply iterative reflection to improve the response quality"""
+    try:
+        reflection_prompt = await Path("prompts/reflection.txt").read_text()
+        current_response = response
+
+        for iteration in range(max_iterations):
+            logger.info("Reflection iteration %d/%d", iteration + 1, max_iterations)
+
+            messages = [
+                SystemMessage(content=reflection_prompt.format(question=question, response=current_response)),
+                HumanMessage(content="Revise esta resposta conforme os critérios acima."),
+            ]
+
+            reflection_response = await model.ainvoke(messages)
+            reflection_content = reflection_response.content.strip()
+
+            if reflection_content == "APROVADA":
+                logger.info("Response approved by reflection after %d iterations", iteration + 1)
+                return current_response
+
+            logger.info("Response improved in iteration %d", iteration + 1)
+            current_response = reflection_content
+
+        logger.info("Reflection completed after max iterations (%d)", max_iterations)
+
+        return current_response
+    except Exception as e:
+        logger.error("Error in reflection step: %s", str(e))
+        return response
+
+
 async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: str) -> str:
     """Get response from LLM for a given question and session"""
     logger.info("Received question: %s", question)
@@ -83,10 +116,18 @@ async def get_llm_response(agent: CompiledStateGraph, question: str, thread_id: 
 
         response: ResponseFormat = model_response["structured_response"]
 
-        logger.info("Model response: %s ... (truncated)", response.content[:100])
-        logger.info("Response length: %d chars", len(response.content))
+        initial_response = response.content
 
-        return response.content
+        logger.info("Initial response: %s ... (truncated)", initial_response[:100])
+        logger.info("Initial response length: %d chars", len(initial_response))
+
+        model = init_chat_model(settings.MODEL_NAME, model_provider="google_genai")
+
+        final_response = await reflect_on_response(model, question, initial_response)
+
+        logger.info("Final response length: %d chars", len(final_response))
+
+        return final_response
     except Exception as e:
         logger.error("Error getting LLM response: %s", str(e))
         return "Peço desculpas, mas ocorreu um erro ao processar sua solicitação. Por favor, tente novamente."
