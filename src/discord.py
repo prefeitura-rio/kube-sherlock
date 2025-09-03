@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import discord
@@ -11,50 +11,38 @@ from .logger import logger
 from .utils import split_content
 
 
+def validate_message(message: discord.Message, whitelisted_users: set[str]) -> MessageState:
+    """Validate message and return appropriate state."""
+    match message.channel:
+        case discord.DMChannel():
+            if not whitelisted_users:
+                return MessageState.NO_WHITELIST
+
+            if message.author.name not in whitelisted_users:
+                return MessageState.DM_MESSAGE_NOT_IN_WHITELIST
+
+            return MessageState.VALID_DM_MESSAGE
+        case _:
+            return MessageState.CHANNEL_MESSAGE
+
+
 @dataclass
 class MessageStateMachine:
-    current_state = MessageState.INCOMING_MESSAGE
+    """Main message state machine that coordinates validation and processing."""
+
+    current_state: MessageState = field(default_factory=lambda: MessageState.INCOMING_MESSAGE)
 
     def process_state(self, message: discord.Message, whitelisted_users: set[str]) -> MessageState:
+        """Process message state using validation function."""
         logger.debug("Processing message from %s in %s", message.author.name, type(message.channel).__name__)
 
-        match message.channel:
-            case discord.DMChannel():
-                if not whitelisted_users:
-                    self.current_state = MessageState.NO_WHITELIST
+        new_state = validate_message(message, whitelisted_users)
 
-                    logger.debug(
-                        "State transition: %s -> %s (no whitelist)",
-                        MessageState.INCOMING_MESSAGE,
-                        self.current_state,
-                    )
+        logger.debug("State transition: %s -> %s (%s)", MessageState.INCOMING_MESSAGE, new_state, new_state.value)
 
-                    return self.current_state
+        self.current_state = new_state
 
-                if message.author.name not in whitelisted_users:
-                    self.current_state = MessageState.DM_MESSAGE_NOT_IN_WHITELIST
-
-                    logger.debug(
-                        "State transition: %s -> %s (user not in whitelist)",
-                        MessageState.INCOMING_MESSAGE,
-                        self.current_state,
-                    )
-
-                    return self.current_state
-
-                self.current_state = MessageState.VALID_DM_MESSAGE
-                logger.debug("State transition: %s -> %s (valid DM)", MessageState.INCOMING_MESSAGE, self.current_state)
-                return self.current_state
-            case _:
-                self.current_state = MessageState.CHANNEL_MESSAGE
-
-                logger.debug(
-                    "State transition: %s -> %s (channel message)",
-                    MessageState.INCOMING_MESSAGE,
-                    self.current_state,
-                )
-
-                return self.current_state
+        return new_state
 
 
 async def send_long_message(channel: "Messageable", content: str, max_length: int = constants.DISCORD_CHAR_LIMIT):
