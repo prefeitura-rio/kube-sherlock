@@ -82,6 +82,12 @@ class SherlockBot(discord.Client):
         logger.info("Initializing MCP agent...")
 
         self.tools = await self.client.get_tools()
+
+        logger.info("MCP tools available:")
+
+        for tool in self.tools:
+            logger.info("  - %s: %s", tool.name, tool.description)
+
         self.agent = await create_agent(self.store, self.checkpointer, self.tools)
 
         logger.info("Agent initialization complete.")
