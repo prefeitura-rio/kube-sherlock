@@ -75,10 +75,14 @@ async def create_execution_plan(question: str) -> ExecutionPlan:
 
         match execution_plan:
             case ExecutionPlan():
-                return validate_plan_dependencies(execution_plan)
+                validated_plan = validate_plan_dependencies(execution_plan)
+                logger.info("Created execution plan: %s (%d steps)", validated_plan.summary, len(validated_plan.steps))
+                return validated_plan
             case _:
                 validated_plan = ExecutionPlan.model_validate(execution_plan)
-                return validate_plan_dependencies(validated_plan)
+                validated_plan = validate_plan_dependencies(validated_plan)
+                logger.info("Created execution plan: %s (%d steps)", validated_plan.summary, len(validated_plan.steps))
+                return validated_plan
 
     except Exception as e:
         logger.error("Failed to create execution plan: %s", str(e))
@@ -94,12 +98,14 @@ async def create_execution_plan(question: str) -> ExecutionPlan:
             ],
             summary="Execução direta sem planejamento detalhado",
         )
-        return validate_plan_dependencies(fallback_plan)
+        validated_plan = validate_plan_dependencies(fallback_plan)
+        logger.info("Using fallback plan: %s (%d steps)", validated_plan.summary, len(validated_plan.steps))
+        return validated_plan
 
 
 async def execute_step(agent: CompiledStateGraph, step: Step, thread_id: str, previous_results: dict[int, str]) -> str:
     """Execute a single step and return the result"""
-    logger.info("Executing step %d: %s", step.id, step.description)
+    logger.info("Executing step %d (%s): %s", step.id, step.description, step.kubectl_command or "no command")
 
     command_section = f"COMANDO SUGERIDO: {step.kubectl_command}" if step.kubectl_command else ""
     context_section = ""
@@ -119,7 +125,7 @@ async def execute_step(agent: CompiledStateGraph, step: Step, thread_id: str, pr
 
     result = await get_basic_llm_response(agent, step_question, f"{thread_id}_step_{step.id}_{uuid.uuid4().hex[:8]}")
 
-    logger.info("Step %d completed", step.id)
+    logger.info("Step %d (%s) completed successfully", step.id, step.description)
     return result
 
 
@@ -140,14 +146,17 @@ def has_unsatisfied_dependencies(step: Step, results: dict[int, str]) -> bool:
 
 async def execute_plan(agent: CompiledStateGraph, plan: ExecutionPlan, thread_id: str) -> PlanExecutionResult:
     """Execute the full plan step by step"""
-    logger.info("Executing plan with %d steps", len(plan.steps))
+    logger.info("Starting plan execution: %s (%d steps)", plan.summary, len(plan.steps))
 
     results: dict[int, str] = {}
     step_results = []
 
     for step in plan.steps:
         if has_unsatisfied_dependencies(step, results):
-            logger.warning("Step %d dependencies not satisfied, skipping", step.id)
+            missing_deps = [dep for dep in step.depends_on if dep not in results]
+            logger.warning(
+                "Step %d (%s) dependencies not satisfied, missing: %s", step.id, step.description, missing_deps
+            )
             step_results.append(create_step_result(step, "Dependências não satisfeitas", False))
             continue
 
@@ -156,16 +165,19 @@ async def execute_plan(agent: CompiledStateGraph, plan: ExecutionPlan, thread_id
             results[step.id] = result
             step_results.append(create_step_result(step, result, True))
         except Exception as e:
-            logger.error("Step %d failed: %s", step.id, str(e))
+            logger.error("Step %d (%s) failed: %s", step.id, step.description, str(e))
             error_msg = f"Erro na execução: {e!s}"
             results[step.id] = error_msg
             step_results.append(create_step_result(step, error_msg, False))
+
+    successful_steps = sum(1 for sr in step_results if sr.success)
+    logger.info("Plan execution completed: %d/%d steps successful", successful_steps, len(plan.steps))
 
     return PlanExecutionResult(
         summary=plan.summary,
         step_results=step_results,
         total_steps=len(plan.steps),
-        successful_steps=sum(1 for sr in step_results if sr.success),
+        successful_steps=successful_steps,
     )
 
 
