@@ -3,7 +3,7 @@ from string import Template
 from typing import Annotated, Type, TypedDict, TypeVar, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -43,34 +43,6 @@ class TaskPlan(BaseModel):
     )
     verification_steps: list[str] = Field(
         default_factory=list, description="Steps to verify the task was completed correctly"
-    )
-
-
-class WorkerResponse(BaseModel):
-    """Structured response from the worker agent"""
-
-    content: str = Field(
-        max_length=10000,
-        description="Detailed response with actual tool outputs - must include real command results",
-    )
-
-    summary: str = Field(
-        max_length=500,
-        description="Brief summary of findings and actions taken",
-    )
-
-    is_complete: bool = Field(
-        description="Whether the task was fully completed with valid tool outputs",
-    )
-
-    tools_executed: list[str] = Field(
-        default_factory=list,
-        description="List of actual tools/commands that were executed",
-    )
-
-    has_real_data: bool = Field(
-        default=True,
-        description="Confirms response contains real data, not placeholder/example content",
     )
 
 
@@ -118,6 +90,30 @@ class SupervisorWorkerSystem:
         self.tools = [*self.input_tools, human_assistance]
         self.workflow = self.build_workflow()
 
+    async def invoke_model(
+        self,
+        model: BaseChatModel,
+        system_prompt: str,
+        user_prompt: str,
+        config: RunnableConfig | None = None,
+        *,
+        bind_tools: bool = False,
+    ) -> str:
+        """Helper method to invoke models with or without tools"""
+        if bind_tools:
+            model_with_tools = model.bind_tools(self.tools)
+            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+            response = await model_with_tools.ainvoke(messages, config=config)
+        else:
+            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+            response = await model.ainvoke(messages, config=config)
+
+        match response.content:
+            case str(content):
+                return content
+            case list(content):
+                return " ".join(str(item) for item in content).strip()
+
     async def invoke_structured_model(
         self,
         model: BaseChatModel,
@@ -125,39 +121,11 @@ class SupervisorWorkerSystem:
         system_prompt: str,
         user_prompt: str,
         config: RunnableConfig | None = None,
-        *,
-        bind_tools: bool = False,
     ) -> T:
         """Helper method to invoke structured models with consistent pattern"""
-        if bind_tools:
-            tools_with_schema = [*self.tools, model_type]
-            model_with_tools = model.bind_tools(tools_with_schema)
-
-            enhanced_prompt = (
-                f"{system_prompt}\n\nIMPORTANT: After executing any necessary tools, "
-                f"you MUST call the {model_type.__name__} tool to structure your final response with the results."
-            )
-
-            messages = [SystemMessage(content=enhanced_prompt), HumanMessage(content=user_prompt)]
-            response = await model_with_tools.ainvoke(messages, config=config)
-
-            match response:
-                case AIMessage(tool_calls=tool_calls) if tool_calls:
-                    for tool_call in tool_calls:
-                        if tool_call["name"] == model_type.__name__:
-                            return model_type.model_validate(tool_call["args"])
-
-                    tool_names = [tc["name"] for tc in tool_calls]
-                    raise ValueError(
-                        f"Model called tools {tool_names} but failed to call required "
-                        f"{model_type.__name__} tool for structured response"
-                    )
-
-            raise ValueError(f"Expected tool calls with {model_type.__name__} but got no tool calls")
-        else:
-            structured_model = model.with_structured_output(model_type)
-            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-            return cast(T, await structured_model.ainvoke(messages, config=config))
+        structured_model = model.with_structured_output(model_type)
+        messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        return cast(T, await structured_model.ainvoke(messages, config=config))
 
     def build_workflow(self) -> CompiledStateGraph:
         """Build the supervisor-worker workflow graph"""
@@ -266,20 +234,17 @@ class SupervisorWorkerSystem:
             main_thread_id = state["main_thread_id"]
             config = RunnableConfig(configurable={"thread_id": main_thread_id})
 
-            worker_response = await self.invoke_structured_model(
+            worker_response = await self.invoke_model(
                 self.worker_model,
-                WorkerResponse,
                 self.worker_prompt,
                 task_prompt,
                 config,
                 bind_tools=True,
             )
 
-            logger.info(
-                f"Worker completed: {len(worker_response.content)} chars, complete: {worker_response.is_complete}"
-            )
+            logger.info(f"Worker completed: {len(worker_response)} chars")
 
-            return {"worker_result": worker_response.content}
+            return {"worker_result": worker_response}
         except Exception as e:
             logger.error(f"Worker execution failed: {e}")
             return {"worker_result": f"Error: {e}"}
@@ -366,23 +331,4 @@ class SupervisorWorkerSystem:
 
         except Exception as e:
             logger.error(f"Workflow failed: {e}")
-            return AgentErrorMessages.PROCESSING_REQUEST.value
-
-    async def resume_with_feedback(self, thread_id: str, feedback: str) -> str:
-        """Resume workflow after human feedback"""
-        try:
-            workflow = self.workflow
-
-            config = RunnableConfig(configurable={"thread_id": thread_id})
-            final_state = await workflow.ainvoke({"feedback": feedback}, config)
-
-            response = final_state.get("final_response", "")
-
-            if not response:
-                return AgentErrorMessages.PROCESSING_REQUEST.value
-
-            return response
-
-        except Exception as e:
-            logger.error(f"Resume workflow failed: {e}")
             return AgentErrorMessages.PROCESSING_REQUEST.value
