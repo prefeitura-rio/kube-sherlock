@@ -1,5 +1,6 @@
 from typing import Annotated, Type, TypedDict, TypeVar, cast
 
+from langchain_core.language_models import LanguageModelLike
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
@@ -76,7 +77,7 @@ class SupervisorWorkerSystem:
         self.tools = [*tools, human_assistance]
         self.supervisor_model = create_model()
         self.worker_model = create_model()
-        self.workflow = None
+        self.workflow: CompiledStateGraph | None = None
         self.worker_agent = None
         self.supervisor_prompt = load_prompt_text("supervisor.md")
         self.worker_prompt = load_prompt_text("worker.md")
@@ -88,23 +89,29 @@ class SupervisorWorkerSystem:
 
     async def invoke_structured_model(
         self,
-        model,
+        model: LanguageModelLike,
         model_type: Type[T],
         system_prompt: str,
         user_prompt: str,
         config: RunnableConfig | None = None,
+        *,
+        bind_tools: bool = False,
     ) -> T:
         """Helper method to invoke structured models with consistent pattern"""
+        if bind_tools:
+            model = model.bind_tools(self.tools)
+
         structured_model = model.with_structured_output(model_type)
         messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
         return cast(T, await structured_model.ainvoke(messages, config=config))
 
-    async def ensure_workflow_initialized(self):
+    async def ensure_workflow_initialized(self) -> CompiledStateGraph:
         """Ensure workflow is initialized, initialize if needed"""
         if not self.workflow:
             await self.initialize()
         if self.workflow is None:
             raise RuntimeError("Workflow not initialized")
+        return self.workflow
 
     async def initialize(self):
         """Initialize the supervisor-worker system"""
@@ -154,9 +161,15 @@ class SupervisorWorkerSystem:
                 )
 
         try:
-            plan = await self.invoke_structured_model(self.supervisor_model, TaskPlan, self.supervisor_prompt, prompt)
-            logger.info(f"Plan created (iteration {iteration + 1}): {plan.task_description}")
-            return {"current_plan": plan, "iteration_count": iteration + 1}
+            plan_response = await self.invoke_structured_model(
+                self.supervisor_model,
+                TaskPlan,
+                self.supervisor_prompt,
+                prompt,
+            )
+
+            logger.info(f"Plan created (iteration {iteration + 1}): {plan_response.task_description}")
+            return {"current_plan": plan_response, "iteration_count": iteration + 1}
         except Exception as e:
             logger.error(f"Plan creation failed: {e}")
 
@@ -191,11 +204,7 @@ class SupervisorWorkerSystem:
             config = RunnableConfig(configurable={"thread_id": main_thread_id})
 
             worker_response = await self.invoke_structured_model(
-                self.worker_model,
-                WorkerResponse,
-                self.worker_prompt,
-                task_prompt,
-                config,
+                self.worker_model, WorkerResponse, self.worker_prompt, task_prompt, config, bind_tools=True
             )
 
             logger.info(
@@ -269,10 +278,10 @@ class SupervisorWorkerSystem:
         )
 
         try:
-            await self.ensure_workflow_initialized()
+            workflow = await self.ensure_workflow_initialized()
 
             config = RunnableConfig(configurable={"thread_id": thread_id})
-            final_state = await self.workflow.ainvoke(initial_state, config)
+            final_state = await workflow.ainvoke(initial_state, config)
 
             response = final_state.get("final_response", "")
 
@@ -291,10 +300,10 @@ class SupervisorWorkerSystem:
     async def resume_with_feedback(self, thread_id: str, feedback: str) -> str:
         """Resume workflow after human feedback"""
         try:
-            await self.ensure_workflow_initialized()
+            workflow = await self.ensure_workflow_initialized()
 
             config = RunnableConfig(configurable={"thread_id": thread_id})
-            final_state = await self.workflow.ainvoke({"feedback": feedback}, config)
+            final_state = await workflow.ainvoke({"feedback": feedback}, config)
 
             response = final_state.get("final_response", "")
 
