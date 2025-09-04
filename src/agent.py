@@ -1,4 +1,4 @@
-from typing import Annotated, TypedDict, cast
+from typing import Annotated, Type, TypedDict, TypeVar, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -17,6 +17,8 @@ from .llm import create_model
 from .logger import logger
 from .settings import settings
 from .templates import load_prompt_template, load_prompt_text
+
+T = TypeVar("T", bound=BaseModel)
 
 
 @tool
@@ -84,6 +86,26 @@ class SupervisorWorkerSystem:
         self.task_execution_template = load_prompt_template("task-execution.md")
         self.evaluation_context_template = load_prompt_template("evaluation-context.md")
 
+    async def invoke_structured_model(
+        self,
+        model,
+        model_type: Type[T],
+        system_prompt: str,
+        user_prompt: str,
+        config: RunnableConfig | None = None,
+    ) -> T:
+        """Helper method to invoke structured models with consistent pattern"""
+        structured_model = model.with_structured_output(model_type)
+        messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        return cast(T, await structured_model.ainvoke(messages, config=config))
+
+    async def ensure_workflow_initialized(self):
+        """Ensure workflow is initialized, initialize if needed"""
+        if not self.workflow:
+            await self.initialize()
+        if self.workflow is None:
+            raise RuntimeError("Workflow not initialized")
+
     async def initialize(self):
         """Initialize the supervisor-worker system"""
         logger.info("Initializing supervisor-worker system...")
@@ -131,12 +153,8 @@ class SupervisorWorkerSystem:
                     feedback=state.get("feedback", "Nenhum"),
                 )
 
-        structured_model = self.supervisor_model.with_structured_output(TaskPlan)
-
-        messages = [SystemMessage(content=self.supervisor_prompt), HumanMessage(content=prompt)]
-
         try:
-            plan = cast(TaskPlan, await structured_model.ainvoke(messages))
+            plan = await self.invoke_structured_model(self.supervisor_model, TaskPlan, self.supervisor_prompt, prompt)
             logger.info(f"Plan created (iteration {iteration + 1}): {plan.task_description}")
             return {"current_plan": plan, "iteration_count": iteration + 1}
         except Exception as e:
@@ -172,11 +190,13 @@ class SupervisorWorkerSystem:
             main_thread_id = state["main_thread_id"]
             config = RunnableConfig(configurable={"thread_id": main_thread_id})
 
-            structured_worker = self.worker_model.with_structured_output(WorkerResponse)
-
-            messages = [SystemMessage(content=self.worker_prompt), HumanMessage(content=task_prompt)]
-
-            worker_response = cast(WorkerResponse, await structured_worker.ainvoke(messages, config=config))
+            worker_response = await self.invoke_structured_model(
+                self.worker_model,
+                WorkerResponse,
+                self.worker_prompt,
+                task_prompt,
+                config,
+            )
 
             logger.info(
                 f"Worker completed: {len(worker_response.content)} chars, complete: {worker_response.is_complete}"
@@ -197,11 +217,13 @@ class SupervisorWorkerSystem:
             worker_result=state["worker_result"],
         )
 
-        messages = [SystemMessage(content=self.evaluation_prompt), HumanMessage(content=evaluation_text)]
-
         try:
-            structured_evaluator = self.supervisor_model.with_structured_output(EvaluationResponse)
-            evaluation_response = cast(EvaluationResponse, await structured_evaluator.ainvoke(messages))
+            evaluation_response = await self.invoke_structured_model(
+                self.supervisor_model,
+                EvaluationResponse,
+                self.evaluation_prompt,
+                evaluation_text,
+            )
 
             logger.info(f"Evaluation: {evaluation_response.decision}")
 
@@ -247,8 +269,7 @@ class SupervisorWorkerSystem:
         )
 
         try:
-            if not self.workflow:
-                raise RuntimeError("Workflow not initialized")
+            await self.ensure_workflow_initialized()
 
             config = RunnableConfig(configurable={"thread_id": thread_id})
             final_state = await self.workflow.ainvoke(initial_state, config)
@@ -269,12 +290,8 @@ class SupervisorWorkerSystem:
 
     async def resume_with_feedback(self, thread_id: str, feedback: str) -> str:
         """Resume workflow after human feedback"""
-        if not self.workflow:
-            await self.initialize()
-
         try:
-            if self.workflow is None:
-                raise RuntimeError("Workflow not initialized")
+            await self.ensure_workflow_initialized()
 
             config = RunnableConfig(configurable={"thread_id": thread_id})
             final_state = await self.workflow.ainvoke({"feedback": feedback}, config)
