@@ -56,9 +56,16 @@ async def send_long_message(channel: "Messageable", content: str, max_length: in
 
 async def handle_sherlock_message(channel: "MessageableChannel", response: str):
     """Handle a !sherlock command message with pre-generated response"""
-    if len(response) < constants.DISCORD_CHAR_LIMIT:
+    safe_limit = constants.DISCORD_CHAR_LIMIT - 50
+
+    if len(response) < safe_limit:
         logger.info("Sending single message (under limit)")
-        await channel.send(response)
+
+        try:
+            await channel.send(response)
+        except Exception as e:
+            logger.warning(f"Single message failed ({len(response)} chars), splitting: {e}")
+            await send_long_message(channel, response)
         return
 
     logger.info("Sending as multiple chunks (over limit)")
