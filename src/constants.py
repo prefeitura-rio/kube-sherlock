@@ -10,10 +10,11 @@ class MessageState(Enum):
     VALID_DM_MESSAGE = "valid_dm_message"
 
 
-@dataclass(frozen=True)
-class EvaluationStatus:
-    APPROVED: str = "APROVADO"
-    REFINE: str = "REFINAR"
+class EvaluationDecision(str, Enum):
+    """Allowed evaluation decisions"""
+
+    APPROVED = "APROVADO"
+    REFINE = "REFINAR"
 
 
 @dataclass(frozen=True)

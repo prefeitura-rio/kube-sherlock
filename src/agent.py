@@ -11,7 +11,7 @@ from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
 from pydantic import BaseModel
 
-from .constants import EvaluationStatus, WorkflowDecision
+from .constants import EvaluationDecision, WorkflowDecision
 from .errors import AgentErrorMessages
 from .llm import create_model
 from .logger import logger
@@ -41,6 +41,13 @@ class WorkerResponse(BaseModel):
     content: str
     summary: str
     is_complete: bool
+
+
+class EvaluationResponse(BaseModel):
+    """Structured evaluation response from the supervisor"""
+
+    decision: EvaluationDecision
+    feedback: str = ""
 
 
 class SupervisorState(TypedDict):
@@ -193,23 +200,15 @@ class SupervisorWorkerSystem:
         messages = [SystemMessage(content=self.evaluation_prompt), HumanMessage(content=evaluation_text)]
 
         try:
-            response = await self.supervisor_model.ainvoke(messages)
-            evaluation = str(response.content).strip()
+            structured_evaluator = self.supervisor_model.with_structured_output(EvaluationResponse)
+            evaluation_response = cast(EvaluationResponse, await structured_evaluator.ainvoke(messages))
 
-            match evaluation:
-                case eval_text if EvaluationStatus.APPROVED in eval_text:
-                    logger.info(f"Approved after {state['iteration_count']} iterations")
-                    return {"evaluation": EvaluationStatus.APPROVED, "feedback": ""}
-                case eval_text if f"{EvaluationStatus.REFINE}:" in eval_text:
-                    feedback = eval_text.split(f"{EvaluationStatus.REFINE}:")[1].strip()
-                    logger.info(f"Needs refinement: {feedback[:50]}...")
-                    return {"evaluation": EvaluationStatus.REFINE, "feedback": feedback}
-                case _:
-                    logger.warning(f"Unclear evaluation: {evaluation[:50]}")
-                    return {"evaluation": EvaluationStatus.APPROVED, "feedback": ""}
+            logger.info(f"Evaluation: {evaluation_response.decision}")
+
+            return {"evaluation": evaluation_response.decision, "feedback": evaluation_response.feedback}
         except Exception as e:
             logger.error(f"Evaluation failed: {e}")
-            return {"evaluation": EvaluationStatus.APPROVED, "feedback": ""}
+            return {"evaluation": EvaluationDecision.APPROVED.value, "feedback": ""}
 
     async def finalize_node(self, state: SupervisorState) -> dict:
         """Finalize the workflow with the approved response"""
@@ -222,7 +221,7 @@ class SupervisorWorkerSystem:
         evaluation = state.get("evaluation", "")
 
         match (evaluation, current_iteration >= max_iterations):
-            case (eval_val, _) if eval_val == EvaluationStatus.APPROVED:
+            case (eval_val, _) if eval_val == EvaluationDecision.APPROVED.value:
                 return WorkflowDecision.FINALIZE
             case (_, True):
                 return WorkflowDecision.FINALIZE
