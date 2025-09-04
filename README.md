@@ -5,11 +5,12 @@ A Discord bot for debugging Kubernetes issues in Brazilian Portuguese. The bot r
 ## Features
 
 - **Kubernetes Troubleshooting**: Intelligent assistance in Brazilian Portuguese
-- **Hallucination Prevention**: Dual-agent verification system with real cluster data validation
-- **Conversation Memory**: Per-channel context with automatic cleanup and reset capability
+- **Supervisor-Worker Architecture**: Advanced planning and execution system with feedback loops
+- **Human-in-the-Loop**: Interactive oversight for complex scenarios requiring human judgment
+- **Conversation Memory**: Per-channel context with shared thread management
 - **MCP Integration**: Direct kubectl and shell access via Model Context Protocol
-- **Planning System**: Intelligent step-by-step execution for complex diagnostics
-- **Observability**: Built-in OpenTelemetry metrics and logging
+- **Smart Planning**: Adaptive execution strategy based on task complexity
+- **Type Safety**: Modern Python with enums, pattern matching, and comprehensive type checking
 - **Access Control**: DM whitelist support and message validation
 
 ## Quick Start
@@ -121,6 +122,7 @@ The bot will respond with troubleshooting advice in Portuguese, maintaining conv
 
 - `!sherlock <question>` - Ask a Kubernetes troubleshooting question
 - `!reset` - Clear conversation memory for the current channel/DM
+- **Human assistance responses** - When prompted by the system, provide guidance to continue
 
 ## Development Commands
 
@@ -144,59 +146,66 @@ just typecheck  # Type checking
 
 ### Agent Architecture
 
-The bot uses a sophisticated multi-agent system to ensure accurate and verified responses:
+The bot uses a sophisticated supervisor-worker system with human oversight:
 
-#### Main Agent
+#### Supervisor Agent
 
-- **Purpose**: Primary Kubernetes troubleshooting assistant
-- **Memory**: Maintains conversation context via Redis checkpointer
+- **Purpose**: Strategic planning and evaluation of worker responses
+- **Planning**: Creates structured task plans with kubectl commands and verification steps
+- **Evaluation**: Reviews worker output for quality and completeness
+- **Feedback Loop**: Refines plans based on execution results
+- **Language**: Internal coordination in English for precision
+
+#### Worker Agent
+
+- **Purpose**: Kubernetes troubleshooting execution specialist
+- **Memory**: Maintains conversation context via shared thread management
 - **Tools**: Full access to MCP kubectl tools and shell commands
-- **Language**: Responds in Brazilian Portuguese
+- **Expertise**: Comprehensive Kubernetes knowledge and diagnostic capabilities
+- **Language**: Responds to users in Brazilian Portuguese
 
-#### Reflection Agent
+#### Human-in-the-Loop System
 
-- **Purpose**: Unbiased verification of main agent responses
-- **Memory**: No conversation memory (stateless for objectivity)
-- **Tools**: Same MCP tools as main agent for verification
-- **Function**: Detects hallucinations and validates cluster data
+Interactive oversight for complex scenarios:
 
-#### Hybrid Reflection System
-
-The bot implements a unique two-stage verification process:
-
-1. **Main Agent Response**: Generates initial response using conversation context
-2. **Verification Instruction**: Main agent creates specific verification tasks
-3. **Independent Verification**: Reflection agent verifies using real cluster data
-4. **Response Validation**: Checks for fabricated namespaces, pods, services
-5. **Final Output**: Returns verified response or corrections
+1. **Automatic Detection**: System identifies when human assistance is needed
+2. **Context Provision**: Provides detailed context about the current situation
+3. **Human Guidance**: User provides direction or approval
+4. **Workflow Continuation**: Process resumes with human input integrated
 
 ```python
-# Example verification flow
-Main Agent: "Namespaces: default, kube-system, dev-team-a"
-Reflection Agent: kubectl get namespaces  # Verifies against real cluster
-Real Output: "default, kube-system, monitoring"
-Result: "CORRIJA: Os namespaces reais são: default, kube-system, monitoring"
+# Example human assistance flow
+🤖 Assistência humana solicitada:
+
+O sistema detectou uma situação complexa que requer avaliação humana.
+Context: Pod em estado indefinido após múltiplas tentativas de diagnóstico.
+
+Responda com sua orientação para continuar.
 ```
 
-#### Planning System
+#### Supervisor-Worker Flow
 
-- **Intelligent Planning**: LLM decides when to use step-by-step vs direct execution
-- **Step Execution**: Complex questions broken into verification steps
-- **Conversational Output**: Technical reports converted to natural language
+1. **Plan Creation**: Supervisor analyzes question and creates execution plan
+2. **Task Execution**: Worker agent executes plan with kubectl tools
+3. **Result Evaluation**: Supervisor reviews output for quality
+4. **Feedback Loop**: Refines plan if improvement needed
+5. **Human Oversight**: Escalates complex cases for human review
+6. **Final Response**: Delivers verified response to user
 
 ### Data Flow
 
 ```
-Discord Message → Message Validation → Agent Selection → Tool Execution → Reflection → Response
-     ↓                    ↓                    ↓              ↓            ↓           ↓
-User Command → Whitelist Check → Main Agent → kubectl/shell → Verification → Discord
+Discord Message → Validation → Supervisor → Worker → Evaluation → Human Review → Response
+     ↓               ↓           ↓           ↓         ↓           ↓             ↓
+User Command → Whitelist → Plan Creation → Execute → Review → (If Needed) → Discord
 ```
 
 ### Memory Management
 
-- **Thread Isolation**: Separate Redis threads for main and reflection processes
-- **Automatic Cleanup**: Reflection threads deleted after use to prevent memory leaks
-- **Context Summarization**: Long conversations automatically summarized to fit token limits
+- **Shared Thread Architecture**: Single thread per channel eliminates proliferation
+- **Context Preservation**: Worker maintains conversation history for natural interaction
+- **Supervisor Objectivity**: Planning and evaluation remain context-aware but unbiased
+- **Automatic Cleanup**: `!reset` command clears conversation memory when needed
 
 ### Error Handling
 
@@ -206,23 +215,24 @@ User Command → Whitelist Check → Main Agent → kubectl/shell → Verificati
 
 ## Security & Reliability
 
-### Hallucination Prevention
+### Quality Assurance
 
-The bot implements a robust verification system to prevent AI hallucinations:
+The bot implements a robust quality control system:
 
-- **Real Data Verification**: All cluster information verified against actual kubectl output
-- **Dual-Agent Architecture**: Separate verification agent with no conversation memory
-- **Fail-Safe Design**: Returns errors rather than potentially incorrect information
-- **Tool Validation**: Verifies kubectl commands before execution
+- **Supervisor Evaluation**: All worker responses reviewed for quality and completeness
+- **Feedback Loops**: Iterative refinement until responses meet quality standards
+- **Human Oversight**: Complex scenarios escalated for human review and guidance
+- **Real Data Integration**: Direct kubectl access ensures responses based on actual cluster state
+- **Fail-Safe Design**: System gracefully handles errors without returning incorrect information
 
-### Example Verification
+### Example Quality Control
 
 ```
-User Question: "Liste os namespaces"
-Main Agent: "Os namespaces são: default, kube-system, dev-team-a, prod-team-b"
-Reflection Agent: [Executes kubectl get namespaces]
-Real Output: "default, kube-system, monitoring, cert-manager"
-Final Response: "Os namespaces reais no cluster são: default, kube-system, monitoring, cert-manager"
+User Question: "Por que meu pod está falhando?"
+Supervisor Plan: "1. Check pod status, 2. Review logs, 3. Examine events"
+Worker Execution: [Executes kubectl commands and analyzes output]
+Supervisor Evaluation: "APROVADO - Response comprehensive and accurate"
+Final Response: "Seu pod está falhando devido a erro de configuração..."
 ```
 
 ## Configuration
@@ -240,9 +250,25 @@ Final Response: "Os namespaces reais no cluster são: default, kube-system, moni
 | `AGENT_TIMEOUT`         | No       | Agent timeout in seconds     | `60`                 |
 | `REFLECTION_ITERATIONS` | No       | Max reflection iterations    | `2`                  |
 
+## Technical Implementation
+
+### Modern Python Features
+
+- **Type Safety**: Comprehensive type annotations with `TypedDict`, `Literal`, and custom type aliases
+- **Pattern Matching**: Consistent use of `match-case` statements for clean control flow
+- **Enums & Dataclasses**: Structured constants and configuration with `@dataclass(frozen=True)`
+- **Async/Await**: Full async architecture for optimal Discord bot performance
+
+### Architecture Patterns
+
+- **LangGraph Workflows**: State-driven execution with conditional edges and checkpointing
+- **MCP Integration**: Model Context Protocol for secure kubectl and shell access
+- **Redis Persistence**: Reliable conversation memory with automatic cleanup
+- **Error Handling**: Graceful degradation with comprehensive exception management
+
 # TODO
 
-- Add human-in-the-loop escalation
-- Implement response quality metrics
-- Add comprehensive integration tests
+- Implement response quality metrics and analytics
+- Add comprehensive integration tests for supervisor-worker flows
 - Performance optimization for large clusters
+- Enhanced human-in-the-loop UI/UX improvements
