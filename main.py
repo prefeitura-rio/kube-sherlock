@@ -94,15 +94,18 @@ class SherlockBot(discord.Client):
                 response = await self.supervisor_system.process_question(question, thread_id)
                 await handle_sherlock_message(message.channel, response)
             except Exception as e:
-                if isinstance(e, GraphInterrupt):
-                    interrupt_data = getattr(e, "value", {})
-                    query = interrupt_data.get("query", "Assistência humana solicitada")
-                    await message.channel.send(
-                        f"🤖 Assistência humana solicitada:\n\n{query}\n\nResponda com sua orientação para continuar."
-                    )
-                else:
-                    await message.channel.send(f"Erro ao processar solicitação: {e!s}")
-                    logger.error(f"Error in process_llm_question: {e}")
+                match e:
+                    case GraphInterrupt():
+                        interrupt_data = getattr(e, "value", {})
+                        query = interrupt_data.get("query", "Assistência humana solicitada")
+                        await message.channel.send(
+                            f"🤖 Assistência humana solicitada:"
+                            f"\n\n{query}\n\n"
+                            f"Responda com sua orientação para continuar."
+                        )
+                    case _:
+                        await message.channel.send(f"Erro ao processar solicitação: {e!s}")
+                        logger.error(f"Error in process_llm_question: {e}")
 
     async def process_message(self, message: discord.Message, state: MessageState) -> str | None:
         """Process message based on its state and extract question if valid"""

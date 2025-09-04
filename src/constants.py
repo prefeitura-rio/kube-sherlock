@@ -11,6 +11,18 @@ class MessageState(Enum):
 
 
 @dataclass(frozen=True)
+class EvaluationStatus:
+    APPROVED: str = "APROVADO"
+    REFINE: str = "REFINAR"
+
+
+@dataclass(frozen=True)
+class WorkflowDecision:
+    CONTINUE: str = "continue"
+    FINALIZE: str = "finalize"
+
+
+@dataclass(frozen=True)
 class Constants:
     AGENT_INITIALIZING_MESSAGE: str = "Bot está inicializando..."
     DEFAULT_AGENT_TIMEOUT: int = 300

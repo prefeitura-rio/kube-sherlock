@@ -1,4 +1,4 @@
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -12,6 +12,7 @@ from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
 from pydantic import BaseModel
 
+from .constants import EvaluationStatus, WorkflowDecision
 from .errors import AgentErrorMessages
 from .llm import create_model
 from .logger import logger
@@ -21,14 +22,7 @@ from .templates import load_prompt_template, load_prompt_text
 
 @tool
 def human_assistance(request: str) -> str:
-    """Request human assistance when needed.
-
-    Args:
-        request: Description of what human assistance is needed for
-
-    Returns:
-        Human response
-    """
+    """Request human assistance when needed"""
     human_response = interrupt({"query": request})
     return human_response["data"]
 
@@ -107,7 +101,7 @@ class SupervisorWorkerSystem:
         workflow.add_conditional_edges(
             "evaluate_result",
             self.should_continue,
-            {"continue": "create_plan", "finalize": "finalize"},
+            {WorkflowDecision.CONTINUE: "create_plan", WorkflowDecision.FINALIZE: "finalize"},
         )
 
         workflow.add_edge("finalize", END)
@@ -118,15 +112,16 @@ class SupervisorWorkerSystem:
         """Supervisor creates/refines task plan"""
         iteration = state.get("iteration_count", 0)
 
-        if iteration == 0:
-            prompt = self.plan_creation_template.substitute(question=state["original_question"])
-        else:
-            prompt = self.plan_refinement_template.substitute(
-                question=state["original_question"],
-                previous_plan=state["current_plan"].task_description if state["current_plan"] else "Nenhum",
-                previous_result=state.get("worker_result", "Nenhum"),
-                feedback=state.get("feedback", "Nenhum"),
-            )
+        match iteration:
+            case 0:
+                prompt = self.plan_creation_template.substitute(question=state["original_question"])
+            case _:
+                prompt = self.plan_refinement_template.substitute(
+                    question=state["original_question"],
+                    previous_plan=state["current_plan"].task_description if state["current_plan"] else "Nenhum",
+                    previous_result=state.get("worker_result", "Nenhum"),
+                    feedback=state.get("feedback", "Nenhum"),
+                )
 
         structured_model = self.supervisor_model.with_structured_output(TaskPlan)
 
@@ -134,9 +129,12 @@ class SupervisorWorkerSystem:
 
         try:
             plan = await structured_model.ainvoke(messages)
-            logger.info(f"Plan created (iteration {iteration + 1}): {plan.task_description}")
-
-            return {"current_plan": plan, "iteration_count": iteration + 1}
+            match plan:
+                case TaskPlan():
+                    logger.info(f"Plan created (iteration {iteration + 1}): {plan.task_description}")
+                    return {"current_plan": plan, "iteration_count": iteration + 1}
+                case _:
+                    raise ValueError(f"Expected TaskPlan, got {type(plan)}")
         except Exception as e:
             logger.error(f"Plan creation failed: {e}")
 
@@ -211,34 +209,38 @@ class SupervisorWorkerSystem:
             response = await self.supervisor_model.ainvoke(messages)
             evaluation = str(response.content).strip()
 
-            if "APROVADO" in evaluation:
-                logger.info(f"Approved after {state['iteration_count']} iterations")
-                return {"evaluation": "APROVADO", "feedback": ""}
-            elif "REFINAR:" in evaluation:
-                feedback = evaluation.split("REFINAR:")[1].strip()
-                logger.info(f"Needs refinement: {feedback[:50]}...")
-                return {"evaluation": "REFINAR", "feedback": feedback}
-            else:
-                logger.warning(f"Unclear evaluation: {evaluation[:50]}")
-                return {"evaluation": "APROVADO", "feedback": ""}
+            match evaluation:
+                case eval_text if EvaluationStatus.APPROVED in eval_text:
+                    logger.info(f"Approved after {state['iteration_count']} iterations")
+                    return {"evaluation": EvaluationStatus.APPROVED, "feedback": ""}
+                case eval_text if f"{EvaluationStatus.REFINE}:" in eval_text:
+                    feedback = eval_text.split(f"{EvaluationStatus.REFINE}:")[1].strip()
+                    logger.info(f"Needs refinement: {feedback[:50]}...")
+                    return {"evaluation": EvaluationStatus.REFINE, "feedback": feedback}
+                case _:
+                    logger.warning(f"Unclear evaluation: {evaluation[:50]}")
+                    return {"evaluation": EvaluationStatus.APPROVED, "feedback": ""}
         except Exception as e:
             logger.error(f"Evaluation failed: {e}")
-            return {"evaluation": "APROVADO", "feedback": ""}
+            return {"evaluation": EvaluationStatus.APPROVED, "feedback": ""}
 
     async def finalize_node(self, state: SupervisorState) -> dict:
         """Finalize the workflow with the approved response"""
         return {"final_response": state["worker_result"]}
 
-    def should_continue(self, state: SupervisorState) -> Literal["continue", "finalize"]:
+    def should_continue(self, state: SupervisorState) -> str:
         """Determine whether to continue iterating, get human review, or finalize"""
         max_iterations = state.get("max_iterations", settings.REFLECTION_ITERATIONS)
         current_iteration = state.get("iteration_count", 0)
         evaluation = state.get("evaluation", "")
 
-        if evaluation == "APROVADO" or current_iteration >= max_iterations:
-            return "finalize"
-
-        return "continue"
+        match (evaluation, current_iteration >= max_iterations):
+            case (eval_val, _) if eval_val == EvaluationStatus.APPROVED:
+                return WorkflowDecision.FINALIZE
+            case (_, True):
+                return WorkflowDecision.FINALIZE
+            case _:
+                return WorkflowDecision.CONTINUE
 
     async def process_question(self, question: str, thread_id: str) -> str:
         """Process a question through the supervisor-worker workflow"""
