@@ -3,7 +3,7 @@ from string import Template
 from typing import Annotated, Type, TypedDict, TypeVar, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -103,10 +103,24 @@ class SupervisorWorkerSystem:
         bind_tools: bool = False,
     ) -> T:
         """Helper method to invoke structured models with consistent pattern"""
-        base_model = model.bind_tools(self.tools) if bind_tools else model
-        structured_model = base_model.with_structured_output(model_type)
-        messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-        return cast(T, await structured_model.ainvoke(messages, config=config))
+        if bind_tools:
+            tools_with_schema = [*self.tools, model_type]
+            model_with_tools = model.bind_tools(tools_with_schema, tool_choice="any")
+
+            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+            response = await model_with_tools.ainvoke(messages, config=config)
+
+            match response:
+                case AIMessage(tool_calls=tool_calls) if tool_calls:
+                    for tool_call in tool_calls:
+                        if tool_call["name"] == model_type.__name__:
+                            return model_type.model_validate(tool_call["args"])
+
+            raise ValueError(f"Expected {model_type.__name__} tool call but none found")
+        else:
+            structured_model = model.with_structured_output(model_type)
+            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+            return cast(T, await structured_model.ainvoke(messages, config=config))
 
     def build_workflow(self) -> CompiledStateGraph:
         """Build the supervisor-worker workflow graph"""
