@@ -58,7 +58,7 @@ class SherlockBot(discord.Client):
                 return False
 
             config = RunnableConfig(configurable={"thread_id": thread_id})
-            state = self.supervisor_system.workflow.get_state(config)
+            state = await self.supervisor_system.workflow.aget_state(config)
 
             if state.next and len(state.next) > 0:
                 command = Command(resume={"data": question})
