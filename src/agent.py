@@ -1,6 +1,8 @@
+from dataclasses import dataclass, field
+from string import Template
 from typing import Annotated, Type, TypedDict, TypeVar, cast
 
-from langchain_core.language_models import LanguageModelLike
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
@@ -68,28 +70,31 @@ class SupervisorState(TypedDict):
     main_thread_id: str
 
 
+@dataclass
 class SupervisorWorkerSystem:
     """Supervisor-Worker agent system with feedback loops"""
 
-    def __init__(self, store: BaseStore, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
-        self.store = store
-        self.checkpointer = checkpointer
-        self.tools = [*tools, human_assistance]
-        self.supervisor_model = create_model()
-        self.worker_model = create_model()
-        self.workflow: CompiledStateGraph | None = None
-        self.worker_agent = None
-        self.supervisor_prompt = load_prompt_text("supervisor.md")
-        self.worker_prompt = load_prompt_text("worker.md")
-        self.evaluation_prompt = load_prompt_text("evaluation.md")
-        self.plan_creation_template = load_prompt_template("plan-creation.md")
-        self.plan_refinement_template = load_prompt_template("plan-refinement.md")
-        self.task_execution_template = load_prompt_template("task-execution.md")
-        self.evaluation_context_template = load_prompt_template("evaluation-context.md")
+    store: BaseStore
+    checkpointer: BaseCheckpointSaver
+    input_tools: list[BaseTool]
+    workflow: CompiledStateGraph = field(init=False)
+    supervisor_model: BaseChatModel = field(default_factory=create_model)
+    worker_model: BaseChatModel = field(default_factory=create_model)
+    supervisor_prompt: str = field(default_factory=lambda: load_prompt_text("supervisor.md"))
+    worker_prompt: str = field(default_factory=lambda: load_prompt_text("worker.md"))
+    evaluation_prompt: str = field(default_factory=lambda: load_prompt_text("evaluation.md"))
+    plan_creation_template: Template = field(default_factory=lambda: load_prompt_template("plan-creation.md"))
+    plan_refinement_template: Template = field(default_factory=lambda: load_prompt_template("plan-refinement.md"))
+    task_execution_template: Template = field(default_factory=lambda: load_prompt_template("task-execution.md"))
+    evaluation_context_template: Template = field(default_factory=lambda: load_prompt_template("evaluation-context.md"))
+
+    def __post_init__(self) -> None:
+        self.tools = [*self.input_tools, human_assistance]
+        self.workflow = self.build_workflow()
 
     async def invoke_structured_model(
         self,
-        model: LanguageModelLike,
+        model: BaseChatModel,
         model_type: Type[T],
         system_prompt: str,
         user_prompt: str,
@@ -98,28 +103,10 @@ class SupervisorWorkerSystem:
         bind_tools: bool = False,
     ) -> T:
         """Helper method to invoke structured models with consistent pattern"""
-        if bind_tools:
-            model = model.bind_tools(self.tools)
-
-        structured_model = model.with_structured_output(model_type)
+        base_model = model.bind_tools(self.tools) if bind_tools else model
+        structured_model = base_model.with_structured_output(model_type)
         messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
         return cast(T, await structured_model.ainvoke(messages, config=config))
-
-    async def ensure_workflow_initialized(self) -> CompiledStateGraph:
-        """Ensure workflow is initialized, initialize if needed"""
-        if not self.workflow:
-            await self.initialize()
-        if self.workflow is None:
-            raise RuntimeError("Workflow not initialized")
-        return self.workflow
-
-    async def initialize(self):
-        """Initialize the supervisor-worker system"""
-        logger.info("Initializing supervisor-worker system...")
-
-        self.workflow = self.build_workflow()
-
-        logger.info("Supervisor-worker system initialized successfully")
 
     def build_workflow(self) -> CompiledStateGraph:
         """Build the supervisor-worker workflow graph"""
@@ -204,7 +191,12 @@ class SupervisorWorkerSystem:
             config = RunnableConfig(configurable={"thread_id": main_thread_id})
 
             worker_response = await self.invoke_structured_model(
-                self.worker_model, WorkerResponse, self.worker_prompt, task_prompt, config, bind_tools=True
+                self.worker_model,
+                WorkerResponse,
+                self.worker_prompt,
+                task_prompt,
+                config,
+                bind_tools=True,
             )
 
             logger.info(
@@ -261,8 +253,6 @@ class SupervisorWorkerSystem:
 
     async def process_question(self, question: str, thread_id: str) -> str:
         """Process a question through the supervisor-worker workflow"""
-        if not self.workflow:
-            await self.initialize()
 
         initial_state = SupervisorState(
             messages=[HumanMessage(content=question)],
@@ -278,7 +268,7 @@ class SupervisorWorkerSystem:
         )
 
         try:
-            workflow = await self.ensure_workflow_initialized()
+            workflow = self.workflow
 
             config = RunnableConfig(configurable={"thread_id": thread_id})
             final_state = await workflow.ainvoke(initial_state, config)
@@ -300,7 +290,7 @@ class SupervisorWorkerSystem:
     async def resume_with_feedback(self, thread_id: str, feedback: str) -> str:
         """Resume workflow after human feedback"""
         try:
-            workflow = await self.ensure_workflow_initialized()
+            workflow = self.workflow
 
             config = RunnableConfig(configurable={"thread_id": thread_id})
             final_state = await workflow.ainvoke({"feedback": feedback}, config)
@@ -315,14 +305,3 @@ class SupervisorWorkerSystem:
         except Exception as e:
             logger.error(f"Resume workflow failed: {e}")
             return AgentErrorMessages.PROCESSING_REQUEST.value
-
-
-async def create_supervisor_worker_system(
-    store: BaseStore, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]
-) -> SupervisorWorkerSystem:
-    """Create and initialize the supervisor-worker system"""
-    system = SupervisorWorkerSystem(store, checkpointer, tools)
-
-    await system.initialize()
-
-    return system

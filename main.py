@@ -11,7 +11,7 @@ from langgraph.store.redis.aio import AsyncRedisStore
 from langgraph.types import Command
 
 import discord
-from src.agent import SupervisorWorkerSystem, create_supervisor_worker_system
+from src.agent import SupervisorWorkerSystem
 from src.constants import MessageState, constants
 from src.discord import MessageStateMachine, handle_sherlock_message
 from src.healthcheck import run_http_server
@@ -136,7 +136,7 @@ class SherlockBot(discord.Client):
         for tool in self.tools:
             logger.info("  - %s: %s", tool.name, tool.description)
 
-        self.supervisor_system = await create_supervisor_worker_system(self.store, self.checkpointer, self.tools)
+        self.supervisor_system = SupervisorWorkerSystem(self.store, self.checkpointer, self.tools)
 
         logger.info("Supervisor-worker system initialization complete.")
 
