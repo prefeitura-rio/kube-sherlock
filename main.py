@@ -3,9 +3,12 @@ import sys
 
 import uvloop
 from anyio import Path
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langgraph.errors import GraphInterrupt
 from langgraph.store.redis.aio import AsyncRedisStore
+from langgraph.types import Command
 
 import discord
 from src.agent import SupervisorWorkerSystem, create_supervisor_worker_system
@@ -48,6 +51,38 @@ class SherlockBot(discord.Client):
             return True
         return False
 
+    async def handle_human_commands(self, message: discord.Message, question: str, thread_id: str) -> bool:
+        """Handle human assistance responses. Returns True if command was processed."""
+        try:
+            if not self.supervisor_system or not self.supervisor_system.workflow:
+                return False
+
+            config = RunnableConfig(configurable={"thread_id": thread_id})
+            state = self.supervisor_system.workflow.get_state(config)
+
+            if state.next and len(state.next) > 0:
+                command = Command(resume={"data": question})
+
+                response_events = self.supervisor_system.workflow.astream(command, config, stream_mode="values")
+
+                final_response = None
+
+                async for event in response_events:
+                    if "final_response" in event:
+                        final_response = event["final_response"]
+
+                if final_response:
+                    await handle_sherlock_message(message.channel, final_response)
+                else:
+                    await message.channel.send("Processo concluído.")
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Error handling human command: {e}")
+
+        return False
+
     async def process_llm_question(self, message: discord.Message, question: str, thread_id: str):
         """Process question through supervisor-worker system and send response"""
         if not self.supervisor_system:
@@ -55,9 +90,19 @@ class SherlockBot(discord.Client):
             return
 
         async with message.channel.typing():
-            response = await self.supervisor_system.process_question(question, thread_id)
-
-        await handle_sherlock_message(message.channel, response)
+            try:
+                response = await self.supervisor_system.process_question(question, thread_id)
+                await handle_sherlock_message(message.channel, response)
+            except Exception as e:
+                if isinstance(e, GraphInterrupt):
+                    interrupt_data = getattr(e, "value", {})
+                    query = interrupt_data.get("query", "Assistência humana solicitada")
+                    await message.channel.send(
+                        f"🤖 Assistência humana solicitada:\n\n{query}\n\nResponda com sua orientação para continuar."
+                    )
+                else:
+                    await message.channel.send(f"Erro ao processar solicitação: {e!s}")
+                    logger.error(f"Error in process_llm_question: {e}")
 
     async def process_message(self, message: discord.Message, state: MessageState) -> str | None:
         """Process message based on its state and extract question if valid"""
@@ -110,6 +155,9 @@ class SherlockBot(discord.Client):
         thread_id = f"channel_{message.channel.id}"
 
         if await self.handle_reset_command(message, question, thread_id):
+            return
+
+        if await self.handle_human_commands(message, question, thread_id):
             return
 
         await self.process_llm_question(message, question, thread_id)

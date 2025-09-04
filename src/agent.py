@@ -2,13 +2,14 @@ from typing import Annotated, Literal, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import BaseTool
+from langchain_core.tools import BaseTool, tool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
 from langgraph.store.base import BaseStore
+from langgraph.types import interrupt
 from pydantic import BaseModel
 
 from .errors import AgentErrorMessages
@@ -16,7 +17,20 @@ from .llm import create_model
 from .logger import logger
 from .settings import settings
 from .templates import load_prompt_template, load_prompt_text
-from .utils import extract_response_content
+
+
+@tool
+def human_assistance(request: str) -> str:
+    """Request human assistance when needed.
+
+    Args:
+        request: Description of what human assistance is needed for
+
+    Returns:
+        Human response
+    """
+    human_response = interrupt({"query": request})
+    return human_response["data"]
 
 
 class TaskPlan(BaseModel):
@@ -49,7 +63,7 @@ class SupervisorWorkerSystem:
     def __init__(self, store: BaseStore, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
         self.store = store
         self.checkpointer = checkpointer
-        self.tools = tools
+        self.tools = [*tools, human_assistance]
         self.supervisor_model = create_model()
         self.worker_agent = None
         self.workflow = None
@@ -161,7 +175,19 @@ class SupervisorWorkerSystem:
 
             result = await self.worker_agent.ainvoke({"messages": [HumanMessage(content=task_prompt)]}, config=config)
 
-            worker_result = extract_response_content({"structured_response": result})
+            if result.get("messages"):
+                last_message = result["messages"][-1]
+
+                match last_message:
+                    case obj if hasattr(obj, "content"):
+                        worker_result = obj.content
+                    case {"content": content}:
+                        worker_result = content
+                    case _:
+                        worker_result = str(last_message)
+            else:
+                worker_result = str(result)
+
             logger.info(f"Worker completed: {len(worker_result)} chars")
 
             return {"worker_result": worker_result}
@@ -204,7 +230,7 @@ class SupervisorWorkerSystem:
         return {"final_response": state["worker_result"]}
 
     def should_continue(self, state: SupervisorState) -> Literal["continue", "finalize"]:
-        """Determine whether to continue iterating or finalize"""
+        """Determine whether to continue iterating, get human review, or finalize"""
         max_iterations = state.get("max_iterations", settings.REFLECTION_ITERATIONS)
         current_iteration = state.get("iteration_count", 0)
         evaluation = state.get("evaluation", "")
@@ -251,6 +277,29 @@ class SupervisorWorkerSystem:
 
         except Exception as e:
             logger.error(f"Workflow failed: {e}")
+            return AgentErrorMessages.PROCESSING_REQUEST.value
+
+    async def resume_with_feedback(self, thread_id: str, feedback: str) -> str:
+        """Resume workflow after human feedback"""
+        if not self.workflow:
+            await self.initialize()
+
+        try:
+            if self.workflow is None:
+                raise RuntimeError("Workflow not initialized")
+
+            config = RunnableConfig(configurable={"thread_id": thread_id})
+            final_state = await self.workflow.ainvoke({"feedback": feedback}, config)
+
+            response = final_state.get("final_response", "")
+
+            if not response:
+                return AgentErrorMessages.PROCESSING_REQUEST.value
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Resume workflow failed: {e}")
             return AgentErrorMessages.PROCESSING_REQUEST.value
 
 
