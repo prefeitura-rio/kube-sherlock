@@ -1,4 +1,4 @@
-from typing import Annotated, TypedDict
+from typing import Annotated, TypedDict, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -7,7 +7,6 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.prebuilt import create_react_agent
 from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
 from pydantic import BaseModel
@@ -36,6 +35,14 @@ class TaskPlan(BaseModel):
     verification_steps: list[str] = []
 
 
+class WorkerResponse(BaseModel):
+    """Structured response from the worker agent"""
+
+    content: str
+    summary: str
+    is_complete: bool
+
+
 class SupervisorState(TypedDict):
     """State for the supervisor-worker workflow"""
 
@@ -59,8 +66,9 @@ class SupervisorWorkerSystem:
         self.checkpointer = checkpointer
         self.tools = [*tools, human_assistance]
         self.supervisor_model = create_model()
-        self.worker_agent = None
+        self.worker_model = create_model()
         self.workflow = None
+        self.worker_agent = None
         self.supervisor_prompt = load_prompt_text("supervisor.md")
         self.worker_prompt = load_prompt_text("worker.md")
         self.evaluation_prompt = load_prompt_text("evaluation.md")
@@ -72,13 +80,6 @@ class SupervisorWorkerSystem:
     async def initialize(self):
         """Initialize the supervisor-worker system"""
         logger.info("Initializing supervisor-worker system...")
-
-        self.worker_agent = create_react_agent(
-            model=self.supervisor_model,
-            prompt=self.worker_prompt,
-            tools=self.tools,
-            store=self.store,
-        )
 
         self.workflow = self.build_workflow()
 
@@ -128,13 +129,9 @@ class SupervisorWorkerSystem:
         messages = [SystemMessage(content=self.supervisor_prompt), HumanMessage(content=prompt)]
 
         try:
-            plan = await structured_model.ainvoke(messages)
-            match plan:
-                case TaskPlan():
-                    logger.info(f"Plan created (iteration {iteration + 1}): {plan.task_description}")
-                    return {"current_plan": plan, "iteration_count": iteration + 1}
-                case _:
-                    raise ValueError(f"Expected TaskPlan, got {type(plan)}")
+            plan = cast(TaskPlan, await structured_model.ainvoke(messages))
+            logger.info(f"Plan created (iteration {iteration + 1}): {plan.task_description}")
+            return {"current_plan": plan, "iteration_count": iteration + 1}
         except Exception as e:
             logger.error(f"Plan creation failed: {e}")
 
@@ -165,30 +162,20 @@ class SupervisorWorkerSystem:
         )
 
         try:
-            if not self.worker_agent:
-                raise RuntimeError("Worker agent not initialized")
-
             main_thread_id = state["main_thread_id"]
             config = RunnableConfig(configurable={"thread_id": main_thread_id})
 
-            result = await self.worker_agent.ainvoke({"messages": [HumanMessage(content=task_prompt)]}, config=config)
+            structured_worker = self.worker_model.with_structured_output(WorkerResponse)
 
-            if result.get("messages"):
-                last_message = result["messages"][-1]
+            messages = [SystemMessage(content=self.worker_prompt), HumanMessage(content=task_prompt)]
 
-                match last_message:
-                    case obj if hasattr(obj, "content"):
-                        worker_result = obj.content
-                    case {"content": content}:
-                        worker_result = content
-                    case _:
-                        worker_result = str(last_message)
-            else:
-                worker_result = str(result)
+            worker_response = cast(WorkerResponse, await structured_worker.ainvoke(messages, config=config))
 
-            logger.info(f"Worker completed: {len(worker_result)} chars")
+            logger.info(
+                f"Worker completed: {len(worker_response.content)} chars, complete: {worker_response.is_complete}"
+            )
 
-            return {"worker_result": worker_result}
+            return {"worker_result": worker_response.content}
         except Exception as e:
             logger.error(f"Worker execution failed: {e}")
             return {"worker_result": f"Error: {e}"}
