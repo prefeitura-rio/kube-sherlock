@@ -147,18 +147,21 @@ just typecheck  # Type checking
 The bot uses a sophisticated multi-agent system to ensure accurate and verified responses:
 
 #### Main Agent
+
 - **Purpose**: Primary Kubernetes troubleshooting assistant
 - **Memory**: Maintains conversation context via Redis checkpointer
 - **Tools**: Full access to MCP kubectl tools and shell commands
 - **Language**: Responds in Brazilian Portuguese
 
 #### Reflection Agent
+
 - **Purpose**: Unbiased verification of main agent responses
 - **Memory**: No conversation memory (stateless for objectivity)
 - **Tools**: Same MCP tools as main agent for verification
 - **Function**: Detects hallucinations and validates cluster data
 
 #### Hybrid Reflection System
+
 The bot implements a unique two-stage verification process:
 
 1. **Main Agent Response**: Generates initial response using conversation context
@@ -176,6 +179,7 @@ Result: "CORRIJA: Os namespaces reais são: default, kube-system, monitoring"
 ```
 
 #### Planning System
+
 - **Intelligent Planning**: LLM decides when to use step-by-step vs direct execution
 - **Step Execution**: Complex questions broken into verification steps
 - **Conversational Output**: Technical reports converted to natural language
@@ -203,6 +207,7 @@ User Command → Whitelist Check → Main Agent → kubectl/shell → Verificati
 ## Security & Reliability
 
 ### Hallucination Prevention
+
 The bot implements a robust verification system to prevent AI hallucinations:
 
 - **Real Data Verification**: All cluster information verified against actual kubectl output
@@ -211,6 +216,7 @@ The bot implements a robust verification system to prevent AI hallucinations:
 - **Tool Validation**: Verifies kubectl commands before execution
 
 ### Example Verification
+
 ```
 User Question: "Liste os namespaces"
 Main Agent: "Os namespaces são: default, kube-system, dev-team-a, prod-team-b"
@@ -223,16 +229,16 @@ Final Response: "Os namespaces reais no cluster são: default, kube-system, moni
 
 ### Environment Variables
 
-| Variable | Required | Description | Default |
-|----------|----------|-------------|---------|
-| `GOOGLE_API_KEY` | Yes | Google Gemini API key | - |
-| `DISCORD_BOT_TOKEN` | Yes | Discord bot token | - |
-| `REDIS_URL` | Yes | Redis connection string | - |
-| `WHITELIST` | No | Comma-separated DM whitelist | None (DMs disabled) |
-| `KUBECONFIG_PATH` | No | Path to kubeconfig file | `/root/.kube/config` |
-| `LOG_LEVEL` | No | Logging level | `INFO` |
-| `AGENT_TIMEOUT` | No | Agent timeout in seconds | `60` |
-| `REFLECTION_ITERATIONS` | No | Max reflection iterations | `2` |
+| Variable                | Required | Description                  | Default              |
+| ----------------------- | -------- | ---------------------------- | -------------------- |
+| `GOOGLE_API_KEY`        | Yes      | Google Gemini API key        | -                    |
+| `DISCORD_BOT_TOKEN`     | Yes      | Discord bot token            | -                    |
+| `REDIS_URL`             | Yes      | Redis connection string      | -                    |
+| `WHITELIST`             | No       | Comma-separated DM whitelist | None (DMs disabled)  |
+| `KUBECONFIG_PATH`       | No       | Path to kubeconfig file      | `/root/.kube/config` |
+| `LOG_LEVEL`             | No       | Logging level                | `INFO`               |
+| `AGENT_TIMEOUT`         | No       | Agent timeout in seconds     | `60`                 |
+| `REFLECTION_ITERATIONS` | No       | Max reflection iterations    | `2`                  |
 
 # TODO
 

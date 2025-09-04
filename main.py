@@ -5,11 +5,10 @@ import uvloop
 from anyio import Path
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.redis.aio import AsyncRedisStore
 
 import discord
-from src.agent import LLMRequestConfig, create_agent, create_reflection_agent, get_llm_response
+from src.agent import SupervisorWorkerSystem, create_supervisor_worker_system
 from src.constants import MessageState, constants
 from src.discord import MessageStateMachine, handle_sherlock_message
 from src.healthcheck import run_http_server
@@ -25,8 +24,7 @@ class SherlockBot(discord.Client):
         self.client = get_mcp_client()
         self.store = store
         self.checkpointer = checkpointer
-        self.agent: CompiledStateGraph | None = None
-        self.reflection_agent: CompiledStateGraph | None = None
+        self.supervisor_system: SupervisorWorkerSystem | None = None
         self.tools: list[BaseTool] | None = None
         self.state = MessageStateMachine()
 
@@ -51,21 +49,13 @@ class SherlockBot(discord.Client):
         return False
 
     async def process_llm_question(self, message: discord.Message, question: str, thread_id: str):
-        """Process question through LLM and send response"""
-        if not self.agent or not self.reflection_agent:
+        """Process question through supervisor-worker system and send response"""
+        if not self.supervisor_system:
             await message.channel.send(constants.AGENT_INITIALIZING_MESSAGE)
             return
 
         async with message.channel.typing():
-            response = await get_llm_response(
-                LLMRequestConfig(
-                    agent=self.agent,
-                    question=question,
-                    thread_id=thread_id,
-                    reflection_agent=self.reflection_agent,
-                    checkpointer=self.checkpointer,
-                )
-            )
+            response = await self.supervisor_system.process_question(question, thread_id)
 
         await handle_sherlock_message(message.channel, response)
 
@@ -98,16 +88,15 @@ class SherlockBot(discord.Client):
         for tool in self.tools:
             logger.info("  - %s: %s", tool.name, tool.description)
 
-        self.agent = await create_agent(self.store, self.checkpointer, self.tools)
-        self.reflection_agent = await create_reflection_agent(self.store, self.tools)
+        self.supervisor_system = await create_supervisor_worker_system(self.store, self.checkpointer, self.tools)
 
-        logger.info("Main agent and reflection agent initialization complete.")
+        logger.info("Supervisor-worker system initialization complete.")
 
     async def on_message(self, message: discord.Message):
         if message.author == self.user:
             return
 
-        if self.agent is None:
+        if self.supervisor_system is None:
             await message.channel.send(constants.AGENT_INITIALIZING_MESSAGE)
             return
 

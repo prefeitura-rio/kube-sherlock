@@ -1,357 +1,265 @@
-import uuid
-from dataclasses import dataclass
+from typing import Annotated, Literal, TypedDict
 
-from langchain.chat_models.base import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.messages.utils import count_tokens_approximately
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph import END, StateGraph
+from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
-from langgraph.prebuilt.chat_agent_executor import AgentState
 from langgraph.store.base import BaseStore
-from langmem.short_term import RunningSummary, SummarizationNode
 from pydantic import BaseModel
 
 from .errors import AgentErrorMessages
 from .llm import create_model
 from .logger import logger
-from .planner import convert_to_conversational_response, create_execution_plan, execute_plan, render_plan_result
 from .settings import settings
 from .templates import load_prompt_template, load_prompt_text
-from .utils import extract_response_content, invoke_agent
-
-system_prompt = load_prompt_text("system.md")
-planning_decision_template = load_prompt_template("planning-decision.md")
-reflection_instruction_template = load_prompt_template("reflection-instruction.md")
+from .utils import extract_response_content
 
 
-@dataclass
-class ReflectionConfig:
-    main_agent: CompiledStateGraph
-    reflection_agent: CompiledStateGraph
-    question: str
-    response: str
-    thread_id: str
-    checkpointer: BaseCheckpointSaver | None = None
+class TaskPlan(BaseModel):
+    """Structured plan for the worker agent"""
+
+    task_description: str
+    expected_outcome: str
+    kubectl_commands: list[str] = []
+    verification_steps: list[str] = []
 
 
-@dataclass
-class ExecutionConfig:
-    agent: CompiledStateGraph
-    question: str
-    thread_id: str
-    reflection_agent: CompiledStateGraph | None = None
-    checkpointer: BaseCheckpointSaver | None = None
+class SupervisorState(TypedDict):
+    """State for the supervisor-worker workflow"""
+
+    messages: Annotated[list, add_messages]
+    original_question: str
+    current_plan: TaskPlan | None
+    worker_result: str
+    evaluation: str
+    feedback: str
+    iteration_count: int
+    max_iterations: int
+    final_response: str
+    main_thread_id: str
 
 
-@dataclass
-class LLMRequestConfig:
-    agent: CompiledStateGraph
-    question: str
-    thread_id: str
-    use_planning: bool = True
-    reflection_agent: CompiledStateGraph | None = None
-    checkpointer: BaseCheckpointSaver | None = None
+class SupervisorWorkerSystem:
+    """Supervisor-Worker agent system with feedback loops"""
 
+    def __init__(self, store: BaseStore, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
+        self.store = store
+        self.checkpointer = checkpointer
+        self.tools = tools
+        self.supervisor_model = create_model()
+        self.worker_agent = None
+        self.workflow = None
+        self.supervisor_prompt = load_prompt_text("supervisor.md")
+        self.worker_prompt = load_prompt_text("worker.md")
+        self.evaluation_prompt = load_prompt_text("evaluation.md")
+        self.plan_creation_template = load_prompt_template("plan-creation.md")
+        self.plan_refinement_template = load_prompt_template("plan-refinement.md")
+        self.task_execution_template = load_prompt_template("task-execution.md")
+        self.evaluation_context_template = load_prompt_template("evaluation-context.md")
 
-async def should_use_planning_llm(question: str) -> bool:
-    """Let the LLM decide if step-by-step planning is needed."""
-    try:
-        model = create_model()
+    async def initialize(self):
+        """Initialize the supervisor-worker system"""
+        logger.info("Initializing supervisor-worker system...")
 
-        prompt_content = planning_decision_template.substitute(question=question)
-
-        messages = [
-            SystemMessage(content=prompt_content),
-            HumanMessage(content="Analise esta pergunta e responda apenas: PLANNING ou DIRECT"),
-        ]
-
-        response = await model.ainvoke(messages)
-        decision = str(response.content).strip().upper()
-
-        use_planning = "PLANNING" in decision
-        logger.info("LLM planning decision for '%s': %s", question[:50], "PLANNING" if use_planning else "DIRECT")
-
-        return use_planning
-
-    except Exception as e:
-        logger.error("Failed to get LLM planning decision: %s", str(e))
-        logger.info("Falling back to heuristic planning decision")
-        return should_use_planning_heuristic(question)
-
-
-def should_use_planning_heuristic(question: str) -> bool:
-    """Fallback heuristic-based planning decision."""
-    question_lower = question.lower()
-
-    has_planning_keywords = any(keyword in question_lower for keyword in settings.planning_keywords)
-    has_complex_patterns = any(pattern in question_lower for pattern in settings.planning_patterns)
-    is_long_question = len(question.split()) > settings.LONG_QUESTION_WORD_THRESHOLD
-
-    return has_planning_keywords or has_complex_patterns or is_long_question
-
-
-class ResponseFormat(BaseModel):
-    """Pydantic model for structured LLM responses"""
-
-    content: str
-
-
-class State(AgentState):
-    """Custom state to hold running summary"""
-
-    context: dict[str, RunningSummary]
-    structured_response: ResponseFormat
-
-
-def pre_model_hook(model: BaseChatModel):
-    """Pre-process messages before sending to the LLM"""
-    return SummarizationNode(
-        token_counter=count_tokens_approximately,
-        model=model,
-        max_tokens=settings.CONTEXT_MAX_TOKENS,
-        max_tokens_before_summary=settings.CONTEXT_MAX_TOKENS,
-        max_summary_tokens=settings.SUMMARIZATION_MAX_TOKENS,
-        output_messages_key="llm_input_messages",
-    )
-
-
-async def create_agent(store: BaseStore, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
-    """Create and configure the main LangGraph agent with MCP tools"""
-    logger.info("Initializing main agent with MCP tools...")
-
-    model = create_model()
-
-    logger.info("Loaded %d MCP tools", len(tools))
-
-    try:
-        agent = create_react_agent(
-            model=model,
-            prompt=system_prompt,
-            tools=tools,
-            checkpointer=checkpointer,
-            store=store,
-            response_format=ResponseFormat,
-            pre_model_hook=pre_model_hook(model),
-            state_schema=State,
+        self.worker_agent = create_react_agent(
+            model=self.supervisor_model,
+            prompt=self.worker_prompt,
+            tools=self.tools,
+            store=self.store,
         )
 
-        logger.info("Main agent created successfully.")
-        logger.info("Response format class: %s", ResponseFormat)
-        logger.info("Response format fields: %s", list(ResponseFormat.model_fields.keys()))
+        self.workflow = self.build_workflow()
 
-    except Exception as e:
-        logger.error("Failed to create main agent: %s", str(e))
-        raise
+        logger.info("Supervisor-worker system initialized successfully")
 
-    return agent
+    def build_workflow(self) -> CompiledStateGraph:
+        """Build the supervisor-worker workflow graph"""
+        workflow = StateGraph(SupervisorState)
 
+        workflow.add_node("create_plan", self.create_plan_node)
+        workflow.add_node("execute_task", self.execute_task_node)
+        workflow.add_node("evaluate_result", self.evaluate_result_node)
+        workflow.add_node("finalize", self.finalize_node)
 
-async def create_reflection_agent(store: BaseStore, tools: list[BaseTool]):
-    """Create unbiased reflection agent without memory for response verification"""
-    logger.info("Initializing reflection agent...")
+        workflow.set_entry_point("create_plan")
 
-    model = create_model()
+        workflow.add_edge("create_plan", "execute_task")
+        workflow.add_edge("execute_task", "evaluate_result")
 
-    reflection_system_prompt = load_prompt_text("reflection-system.md")
-
-    try:
-        reflection_agent = create_react_agent(
-            model=model,
-            prompt=reflection_system_prompt,
-            tools=tools,
-            store=store,
-            response_format=ResponseFormat,
-            pre_model_hook=pre_model_hook(model),
-            state_schema=State,
+        workflow.add_conditional_edges(
+            "evaluate_result",
+            self.should_continue,
+            {"continue": "create_plan", "finalize": "finalize"},
         )
 
-        logger.info("Reflection agent created successfully.")
+        workflow.add_edge("finalize", END)
 
-    except Exception as e:
-        logger.error("Failed to create reflection agent: %s", str(e))
-        raise
+        return workflow.compile(checkpointer=self.checkpointer)
 
-    return reflection_agent
+    async def create_plan_node(self, state: SupervisorState) -> dict:
+        """Supervisor creates/refines task plan"""
+        iteration = state.get("iteration_count", 0)
 
-
-async def cleanup_reflection_threads(checkpointer: BaseCheckpointSaver, main_thread_id: str, reflection_thread_id: str):
-    """Clean up temporary reflection thread memory"""
-    try:
-        await checkpointer.adelete_thread(main_thread_id)
-        await checkpointer.adelete_thread(reflection_thread_id)
-        logger.debug("Cleaned up reflection threads: %s, %s", main_thread_id, reflection_thread_id)
-    except Exception as e:
-        logger.warning("Failed to cleanup reflection threads: %s", str(e))
-
-
-def sanitize_template_input(text: str) -> str:
-    """Sanitize text for template substitution"""
-    return str(text).replace("$", "$$")
-
-
-async def generate_reflection_instruction(config: ReflectionConfig) -> tuple[str, str]:
-    """Generate reflection instruction and return thread IDs"""
-    safe_question = sanitize_template_input(config.question)
-    safe_response = sanitize_template_input(config.response)
-
-    instruction_prompt = reflection_instruction_template.substitute(question=safe_question, response=safe_response)
-
-    main_thread_id = f"{config.thread_id}_main_instruction_{uuid.uuid4().hex[:6]}"
-    instruction_response = await invoke_agent(config.main_agent, instruction_prompt, main_thread_id)
-    instruction_content = extract_response_content(instruction_response)
-
-    return instruction_content, main_thread_id
-
-
-async def execute_reflection_verification(config: ReflectionConfig, instruction_content: str) -> tuple[str, str]:
-    """Execute reflection verification and return result and thread ID"""
-    reflection_thread_id = f"{config.thread_id}_reflection_{uuid.uuid4().hex[:6]}"
-    verification_response = await invoke_agent(config.reflection_agent, instruction_content, reflection_thread_id)
-    verification_content = extract_response_content(verification_response).strip()
-
-    return verification_content, reflection_thread_id
-
-
-def extract_correction(content: str, is_fuzzy: bool = False) -> str | None:
-    """Extract correction from CORRIJA content"""
-    if is_fuzzy:
-        parts = content.split("CORRIJA")
-        return parts[1].strip(": ") if len(parts) > 1 else None
-    else:
-        return content.split("CORRIJA:", 1)[1].strip()
-
-
-def parse_verification_result(verification_content: str, original_response: str) -> str:
-    """Parse verification result and return final response"""
-    if verification_content.startswith("APROVADA") or "APROVADA" in verification_content:
-        match_type = "exact" if verification_content.startswith("APROVADA") else "fuzzy"
-        logger.info("Response approved by hybrid reflection (%s match)", match_type)
-        return original_response
-
-    if verification_content.startswith("CORRIJA:") or "CORRIJA" in verification_content:
-        is_fuzzy = not verification_content.startswith("CORRIJA:")
-        corrected_response = extract_correction(verification_content, is_fuzzy)
-
-        if not corrected_response:
-            error_type = "empty fuzzy correction" if is_fuzzy else "empty correction provided"
-            logger.warning("%s, returning error", error_type.capitalize())
-            return f"Erro: correção vazia. {AgentErrorMessages.PROCESSING_REQUEST.value}"
-
-        match_type = "fuzzy match" if is_fuzzy else ""
-        logger.info("Response corrected by hybrid reflection%s", f" ({match_type})" if match_type else "")
-        return corrected_response
-
-    logger.warning("Unclear verification result: %s", verification_content[:100])
-    return f"Erro: resultado de verificação unclear. {AgentErrorMessages.PROCESSING_REQUEST.value}"
-
-
-async def hybrid_reflection(config: ReflectionConfig) -> str:
-    """Hybrid reflection: main agent instructs separate reflection agent"""
-    main_thread_id = None
-    reflection_thread_id = None
-
-    try:
-        if not config.question or not config.response:
-            logger.warning("Skipping reflection due to empty question or response")
-            return config.response
-
-        instruction_content, main_thread_id = await generate_reflection_instruction(config)
-        verification_content, reflection_thread_id = await execute_reflection_verification(config, instruction_content)
-        result = parse_verification_result(verification_content, config.response)
-
-        return result
-
-    except Exception as e:
-        logger.error("Error in hybrid reflection: %s", str(e))
-        logger.warning("Reflection failed - response may contain unverified data")
-        return f"Erro na verificação da resposta. {AgentErrorMessages.PROCESSING_REQUEST.value}"
-
-    finally:
-        if main_thread_id and reflection_thread_id and config.checkpointer:
-            await cleanup_reflection_threads(config.checkpointer, main_thread_id, reflection_thread_id)
-
-
-async def decide_planning_strategy(question: str, use_planning: bool) -> bool:
-    """Decide whether to use step-by-step planning for the question"""
-    if not use_planning or not settings.ENABLE_STEP_PLANNING:
-        return False
-
-    if settings.USE_LLM_PLANNING_DECISION:
-        return await should_use_planning_llm(question)
-    else:
-        return should_use_planning_heuristic(question)
-
-
-async def execute_with_planning(agent: CompiledStateGraph, question: str, thread_id: str) -> str:
-    """Execute question using step-by-step planning approach"""
-    logger.info("Using step-by-step planning for complex question")
-
-    plan = await create_execution_plan(question)
-    logger.info("Created plan with %d steps", len(plan.steps))
-
-    plan_result = await execute_plan(agent, plan, thread_id)
-    technical_report = await render_plan_result(plan_result)
-
-    return await convert_to_conversational_response(technical_report)
-
-
-async def execute_direct(config: ExecutionConfig) -> str:
-    """Execute question using direct approach with optional hybrid reflection"""
-    model_response = await invoke_agent(config.agent, config.question, config.thread_id)
-    initial_response = extract_response_content(model_response)
-
-    error_responses = [
-        AgentErrorMessages.EMPTY_RESPONSE.value,
-        AgentErrorMessages.STRUCTURED_RESPONSE_NOT_FOUND.value,
-    ]
-
-    if initial_response in error_responses:
-        return initial_response
-
-    if config.reflection_agent:
-        final_response = await hybrid_reflection(
-            ReflectionConfig(
-                main_agent=config.agent,
-                reflection_agent=config.reflection_agent,
-                question=config.question,
-                response=initial_response,
-                thread_id=config.thread_id,
-                checkpointer=config.checkpointer,
+        if iteration == 0:
+            prompt = self.plan_creation_template.substitute(question=state["original_question"])
+        else:
+            prompt = self.plan_refinement_template.substitute(
+                question=state["original_question"],
+                previous_plan=state["current_plan"].task_description if state["current_plan"] else "Nenhum",
+                previous_result=state.get("worker_result", "Nenhum"),
+                feedback=state.get("feedback", "Nenhum"),
             )
-        )
-    else:
-        final_response = initial_response
 
-    logger.info("Final response length: %d chars", len(final_response))
-    return final_response
+        structured_model = self.supervisor_model.with_structured_output(TaskPlan)
 
+        messages = [SystemMessage(content=self.supervisor_prompt), HumanMessage(content=prompt)]
 
-async def get_llm_response(config: LLMRequestConfig) -> str:
-    """Get response from LLM for a given question and session"""
-    logger.info("Received question: %s", config.question)
-    logger.info("Session ID: %s", config.thread_id)
-
-    planning_needed = await decide_planning_strategy(config.question, config.use_planning)
-
-    if planning_needed:
         try:
-            return await execute_with_planning(config.agent, config.question, config.thread_id)
-        except Exception as e:
-            logger.error("Planning execution failed: %s", str(e))
-            logger.info("Falling back to direct execution")
+            plan = await structured_model.ainvoke(messages)
+            logger.info(f"Plan created (iteration {iteration + 1}): {plan.task_description}")
 
-    try:
-        return await execute_direct(
-            ExecutionConfig(
-                agent=config.agent,
-                question=config.question,
-                thread_id=config.thread_id,
-                reflection_agent=config.reflection_agent,
-                checkpointer=config.checkpointer,
+            return {"current_plan": plan, "iteration_count": iteration + 1}
+        except Exception as e:
+            logger.error(f"Plan creation failed: {e}")
+
+            fallback_plan = TaskPlan(
+                task_description=f"Direct diagnosis: {state['original_question']}",
+                expected_outcome="Complete response",
+                kubectl_commands=["kubectl get pods", "kubectl get namespaces"],
+                verification_steps=["Verify completeness"],
             )
+
+            return {"current_plan": fallback_plan, "iteration_count": iteration + 1}
+
+    async def execute_task_node(self, state: SupervisorState) -> dict:
+        """Worker agent executes the planned task"""
+        plan = state["current_plan"]
+
+        if not plan:
+            return {"worker_result": "Error: Plan was not created"}
+
+        commands = "\n".join(f"- {cmd}" for cmd in plan.kubectl_commands)
+        steps = "\n".join(f"- {step}" for step in plan.verification_steps)
+
+        task_prompt = self.task_execution_template.substitute(
+            task_description=plan.task_description,
+            commands=commands,
+            expected_outcome=plan.expected_outcome,
+            verification_steps=steps,
         )
-    except Exception as e:
-        logger.error("Error getting LLM response: %s", str(e))
-        return AgentErrorMessages.PROCESSING_REQUEST.value
+
+        try:
+            if not self.worker_agent:
+                raise RuntimeError("Worker agent not initialized")
+
+            main_thread_id = state["main_thread_id"]
+            config = RunnableConfig(configurable={"thread_id": main_thread_id})
+
+            result = await self.worker_agent.ainvoke({"messages": [HumanMessage(content=task_prompt)]}, config=config)
+
+            worker_result = extract_response_content({"structured_response": result})
+            logger.info(f"Worker completed: {len(worker_result)} chars")
+
+            return {"worker_result": worker_result}
+        except Exception as e:
+            logger.error(f"Worker execution failed: {e}")
+            return {"worker_result": f"Error: {e}"}
+
+    async def evaluate_result_node(self, state: SupervisorState) -> dict:
+        """Supervisor evaluates worker result"""
+        plan_description = state["current_plan"].task_description if state["current_plan"] else "No plan"
+
+        evaluation_text = self.evaluation_context_template.substitute(
+            original_question=state["original_question"],
+            plan_description=plan_description,
+            worker_result=state["worker_result"],
+        )
+
+        messages = [SystemMessage(content=self.evaluation_prompt), HumanMessage(content=evaluation_text)]
+
+        try:
+            response = await self.supervisor_model.ainvoke(messages)
+            evaluation = str(response.content).strip()
+
+            if "APROVADO" in evaluation:
+                logger.info(f"Approved after {state['iteration_count']} iterations")
+                return {"evaluation": "APROVADO", "feedback": ""}
+            elif "REFINAR:" in evaluation:
+                feedback = evaluation.split("REFINAR:")[1].strip()
+                logger.info(f"Needs refinement: {feedback[:50]}...")
+                return {"evaluation": "REFINAR", "feedback": feedback}
+            else:
+                logger.warning(f"Unclear evaluation: {evaluation[:50]}")
+                return {"evaluation": "APROVADO", "feedback": ""}
+        except Exception as e:
+            logger.error(f"Evaluation failed: {e}")
+            return {"evaluation": "APROVADO", "feedback": ""}
+
+    async def finalize_node(self, state: SupervisorState) -> dict:
+        """Finalize the workflow with the approved response"""
+        return {"final_response": state["worker_result"]}
+
+    def should_continue(self, state: SupervisorState) -> Literal["continue", "finalize"]:
+        """Determine whether to continue iterating or finalize"""
+        max_iterations = state.get("max_iterations", settings.REFLECTION_ITERATIONS)
+        current_iteration = state.get("iteration_count", 0)
+        evaluation = state.get("evaluation", "")
+
+        if evaluation == "APROVADO" or current_iteration >= max_iterations:
+            return "finalize"
+
+        return "continue"
+
+    async def process_question(self, question: str, thread_id: str) -> str:
+        """Process a question through the supervisor-worker workflow"""
+        if not self.workflow:
+            await self.initialize()
+
+        initial_state = SupervisorState(
+            messages=[HumanMessage(content=question)],
+            original_question=question,
+            current_plan=None,
+            worker_result="",
+            evaluation="",
+            feedback="",
+            iteration_count=0,
+            max_iterations=settings.REFLECTION_ITERATIONS,
+            final_response="",
+            main_thread_id=thread_id,
+        )
+
+        try:
+            if not self.workflow:
+                raise RuntimeError("Workflow not initialized")
+
+            config = RunnableConfig(configurable={"thread_id": thread_id})
+            final_state = await self.workflow.ainvoke(initial_state, config)
+
+            response = final_state.get("final_response", "")
+
+            if not response:
+                return AgentErrorMessages.PROCESSING_REQUEST.value
+
+            iterations = final_state.get("iteration_count", 0)
+            logger.info(f"Completed in {iterations} iterations")
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Workflow failed: {e}")
+            return AgentErrorMessages.PROCESSING_REQUEST.value
+
+
+async def create_supervisor_worker_system(
+    store: BaseStore, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]
+) -> SupervisorWorkerSystem:
+    """Create and initialize the supervisor-worker system"""
+    system = SupervisorWorkerSystem(store, checkpointer, tools)
+
+    await system.initialize()
+
+    return system

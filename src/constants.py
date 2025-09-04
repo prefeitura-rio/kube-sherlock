@@ -14,7 +14,6 @@ class MessageState(Enum):
 class Constants:
     AGENT_INITIALIZING_MESSAGE: str = "Bot está inicializando..."
     DEFAULT_AGENT_TIMEOUT: int = 300
-    DEFAULT_CONTEXT_MAX_TOKENS: int = 20000
     DEFAULT_DATE_FORMAT: str = "%Y-%m-%d %H:%M:%S"
     DEFAULT_HEALTH_HOST: str = "0.0.0.0"
     DEFAULT_HEALTH_PORT: int = 8080
@@ -22,16 +21,12 @@ class Constants:
     DEFAULT_LOG_FORMAT: str = "[%(levelname)s] %(asctime)s - %(name)s - %(message)s"
     DEFAULT_LOG_LEVEL: str = "INFO"
     DEFAULT_LOG_TRUNCATE_LENGTH: int = 100
-    DEFAULT_LONG_QUESTION_WORD_THRESHOLD: int = 8
     DEFAULT_MAX_WAIT: int = 30
     DEFAULT_MODEL_NAME: str = "gemini-2.5-flash"
     DEFAULT_RECURSION_LIMIT: int = 50
     DEFAULT_REFLECTION_ITERATIONS: int = 3
-    DEFAULT_SUMMARIZATION_MAX_TOKENS: int = 512
-    DEPENDENCY_ERROR_MESSAGE: str = "Dependências não satisfeitas"
     DISCORD_CHAR_LIMIT: int = 2000
     DM_DISABLED_MESSAGE: str = "DMs não estão habilitadas para este bot."
-    EXECUTION_ERROR_PREFIX: str = "Erro na execução: "
     KUBECONFIG_MCP_PATH: str = "/root/.kube/config"
     LOGGER_NAME: str = "kube-sherlock"
     MAX_RECURSION_LIMIT: int = 100
@@ -40,8 +35,6 @@ class Constants:
     RESET_ERROR_MESSAGE: str = "❌ Erro ao resetar conversa. Erro: {error}"
     RESET_SUCCESS_MESSAGE: str = "✅ Conversa resetada! Histórico apagado."
     SHERLOCK_COMMAND: str = "!sherlock"
-    STEP_FAILURE_EMOJI: str = "❌"
-    STEP_SUCCESS_EMOJI: str = "✅"
     WHITELIST_DENIED_MESSAGE: str = "Você não está autorizado a usar este bot."
 
 
