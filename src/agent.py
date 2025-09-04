@@ -12,7 +12,7 @@ from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .constants import EvaluationDecision, WorkflowDecision
 from .errors import AgentErrorMessages
@@ -34,18 +34,44 @@ def human_assistance(request: str) -> str:
 class TaskPlan(BaseModel):
     """Structured plan for the worker agent"""
 
-    task_description: str
-    expected_outcome: str
-    kubectl_commands: list[str] = []
-    verification_steps: list[str] = []
+    task_description: str = Field(
+        min_length=10, max_length=1000, description="Specific, actionable task description - not generic"
+    )
+    expected_outcome: str = Field(min_length=5, max_length=500, description="Concrete expected result")
+    kubectl_commands: list[str] = Field(
+        default_factory=list, description="Specific kubectl commands relevant to the task"
+    )
+    verification_steps: list[str] = Field(
+        default_factory=list, description="Steps to verify the task was completed correctly"
+    )
 
 
 class WorkerResponse(BaseModel):
     """Structured response from the worker agent"""
 
-    content: str
-    summary: str
-    is_complete: bool
+    content: str = Field(
+        max_length=10000,
+        description="Detailed response with actual tool outputs - must include real command results",
+    )
+
+    summary: str = Field(
+        max_length=500,
+        description="Brief summary of findings and actions taken",
+    )
+
+    is_complete: bool = Field(
+        description="Whether the task was fully completed with valid tool outputs",
+    )
+
+    tools_executed: list[str] = Field(
+        default_factory=list,
+        description="List of actual tools/commands that were executed",
+    )
+
+    has_real_data: bool = Field(
+        default=True,
+        description="Confirms response contains real data, not placeholder/example content",
+    )
 
 
 class EvaluationResponse(BaseModel):
@@ -105,9 +131,14 @@ class SupervisorWorkerSystem:
         """Helper method to invoke structured models with consistent pattern"""
         if bind_tools:
             tools_with_schema = [*self.tools, model_type]
-            model_with_tools = model.bind_tools(tools_with_schema, tool_choice="any")
+            model_with_tools = model.bind_tools(tools_with_schema)
 
-            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+            enhanced_prompt = (
+                f"{system_prompt}\n\nIMPORTANT: After executing any necessary tools, "
+                f"you MUST call the {model_type.__name__} tool to structure your final response with the results."
+            )
+
+            messages = [SystemMessage(content=enhanced_prompt), HumanMessage(content=user_prompt)]
             response = await model_with_tools.ainvoke(messages, config=config)
 
             match response:
@@ -116,7 +147,13 @@ class SupervisorWorkerSystem:
                         if tool_call["name"] == model_type.__name__:
                             return model_type.model_validate(tool_call["args"])
 
-            raise ValueError(f"Expected {model_type.__name__} tool call but none found")
+                    tool_names = [tc["name"] for tc in tool_calls]
+                    raise ValueError(
+                        f"Model called tools {tool_names} but failed to call required "
+                        f"{model_type.__name__} tool for structured response"
+                    )
+
+            raise ValueError(f"Expected tool calls with {model_type.__name__} but got no tool calls")
         else:
             structured_model = model.with_structured_output(model_type)
             messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
@@ -174,11 +211,36 @@ class SupervisorWorkerSystem:
         except Exception as e:
             logger.error(f"Plan creation failed: {e}")
 
+            question_lower = state["original_question"].lower()
+            if "pod" in question_lower:
+                commands = ["kubectl get pods --all-namespaces", "kubectl describe pods"]
+                outcome = "List and describe pod status and issues"
+            elif "service" in question_lower:
+                commands = ["kubectl get services --all-namespaces", "kubectl describe services"]
+                outcome = "Analyze service configuration and endpoints"
+            elif "namespace" in question_lower:
+                commands = ["kubectl get namespaces", "kubectl describe namespaces"]
+                outcome = "Review namespace configuration and resource quotas"
+            else:
+                commands = [
+                    "kubectl cluster-info",
+                    "kubectl get nodes",
+                    "kubectl get pods --all-namespaces --show-labels",
+                ]
+                outcome = "Gather cluster overview and identify potential issues"
+
             fallback_plan = TaskPlan(
-                task_description=f"Direct diagnosis: {state['original_question']}",
-                expected_outcome="Complete response",
-                kubectl_commands=["kubectl get pods", "kubectl get namespaces"],
-                verification_steps=["Verify completeness"],
+                task_description=(
+                    f"Intelligent diagnostic analysis for: {state['original_question']} "
+                    f"(fallback mode due to planning error: {str(e)[:50]})"
+                ),
+                expected_outcome=outcome,
+                kubectl_commands=commands,
+                verification_steps=[
+                    "Verify commands executed successfully",
+                    "Check output contains real data, not placeholder text",
+                    "Ensure response addresses the original question",
+                ],
             )
 
             return {"current_plan": fallback_plan, "iteration_count": iteration + 1}
@@ -245,7 +307,12 @@ class SupervisorWorkerSystem:
             return {"evaluation": evaluation_response.decision, "feedback": evaluation_response.feedback}
         except Exception as e:
             logger.error(f"Evaluation failed: {e}")
-            return {"evaluation": EvaluationDecision.APPROVED.value, "feedback": ""}
+            return {
+                "evaluation": EvaluationDecision.REFINE.value,
+                "feedback": (
+                    f"Evaluation system failed - please retry with more specific information. Error: {str(e)[:100]}"
+                ),
+            }
 
     async def finalize_node(self, state: SupervisorState) -> dict:
         """Finalize the workflow with the approved response"""
