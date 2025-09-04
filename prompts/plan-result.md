@@ -5,3 +5,4 @@
 $step_outputs
 
 📋 **Resumo**: Diagnóstico completo executado em $total_steps etapas.
+

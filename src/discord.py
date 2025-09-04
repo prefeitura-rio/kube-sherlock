@@ -63,11 +63,3 @@ async def handle_sherlock_message(channel: "MessageableChannel", response: str):
 
     logger.info("Sending as multiple chunks (over limit)")
     await send_long_message(channel, response)
-
-
-def create_discord_client() -> discord.Client:
-    """Create and configure Discord client with event handlers"""
-    intents = discord.Intents.default()
-    intents.message_content = True
-
-    return discord.Client(intents=intents)
