@@ -1,16 +1,23 @@
 services:
   redis:
     container_name: redis
-    restart: always
+    restart: unless-stopped
     image: redis/redis-stack:latest
     environment:
       - REDIS_ARGS=--requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
 
+  mlflow:
+    container_name: mlflow
+    restart: unless-stopped
+    image: ghcr.io/mlflow/mlflow:latest
+    ports:
+      - "5000:5000"
+
   kube-sherlock:
     container_name: kube-sherlock
-    restart: always
+    restart: unless-stopped
     build:
       context: .
     env_file: .env
