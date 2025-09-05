@@ -1,13 +1,14 @@
 import asyncio
 import sys
 
+import mlflow
 import uvloop
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
-from mlflow import langchain, set_experiment, set_tracking_uri
+from mlflow import langchain
 
 import discord
 from src.agent import SupervisorWorkerSystem
@@ -17,6 +18,10 @@ from src.healthcheck import run_http_server
 from src.logger import logger
 from src.mcp import get_mcp_client
 from src.settings import settings
+
+mlflow.set_experiment(settings.MLFLOW_EXPERIMENT_NAME)
+mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+langchain.autolog()
 
 
 class SherlockBot(discord.Client):
@@ -191,9 +196,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    langchain.autolog()
-
-    set_experiment(settings.MLFLOW_EXPERIMENT_NAME)
-    set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-
     uvloop.run(main())
