@@ -104,6 +104,13 @@ class SupervisorWorkerSystem:
             model_with_tools = model.bind_tools(self.tools)
             messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
             response = await model_with_tools.ainvoke(messages, config=config)
+
+            logger.info(f"Model response type: {type(response)}")
+            logger.info(f"Response content: {response.content}")
+            logger.info(f"Response has tool_calls: {hasattr(response, 'tool_calls')}")
+
+            if hasattr(response, "tool_calls"):
+                logger.info(f"Tool calls: {response.tool_calls}")
         else:
             messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
             response = await model.ainvoke(messages, config=config)
@@ -234,6 +241,12 @@ class SupervisorWorkerSystem:
             main_thread_id = state["main_thread_id"]
             config = RunnableConfig(configurable={"thread_id": main_thread_id})
 
+            logger.info(f"Worker executing with prompt: {task_prompt[:200]}...")
+            logger.info(f"Available tools count: {len(self.tools)}")
+
+            for tool in self.tools:
+                logger.info(f"  Tool: {tool.name}")
+
             worker_response = await self.invoke_model(
                 self.worker_model,
                 self.worker_prompt,
@@ -243,6 +256,7 @@ class SupervisorWorkerSystem:
             )
 
             logger.info(f"Worker completed: {len(worker_response)} chars")
+            logger.info(f"Worker response: {worker_response[:500]}...")
 
             return {"worker_result": worker_response}
         except Exception as e:
