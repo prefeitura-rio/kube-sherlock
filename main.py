@@ -129,16 +129,21 @@ class SherlockBot(discord.Client):
         logger.info("%s has connected to Discord", self.user)
         logger.info("Initializing MCP agent...")
 
-        self.tools = await self.client.get_tools()
+        try:
+            self.tools = await self.client.get_tools()
 
-        logger.info("MCP tools available:")
+            logger.info("MCP tools available:")
 
-        for tool in self.tools:
-            logger.info("  - %s: %s", tool.name, tool.description)
+            for tool in self.tools:
+                logger.info("  - %s: %s", tool.name, tool.description)
 
-        self.supervisor_system = SupervisorWorkerSystem(self.store, self.checkpointer, self.tools)
+            if self.supervisor_system is None:
+                self.supervisor_system = SupervisorWorkerSystem(self.store, self.checkpointer, self.tools)
 
-        logger.info("Supervisor-worker system initialization complete.")
+            logger.info("Supervisor-worker system initialization complete.")
+        except Exception as e:
+            logger.error(f"Failed to initialize supervisor system: {e}")
+            self.supervisor_system = None
 
     async def on_message(self, message: discord.Message):
         if message.author == self.user:
