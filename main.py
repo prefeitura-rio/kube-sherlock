@@ -7,6 +7,7 @@ from langchain_core.tools import BaseTool
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
+from mlflow import langchain, set_experiment, set_tracking_uri
 
 import discord
 from src.agent import SupervisorWorkerSystem
@@ -190,4 +191,9 @@ async def main():
 
 
 if __name__ == "__main__":
+    langchain.autolog()
+
+    set_experiment(settings.MLFLOW_EXPERIMENT_NAME)
+    set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+
     uvloop.run(main())

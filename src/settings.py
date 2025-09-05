@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     REDIS_URL: str | None = None
     REFLECTION_ITERATIONS: int = constants.DEFAULT_REFLECTION_ITERATIONS
     WHITELIST: str | None = None
+    MLFLOW_TRACKING_URI: str = constants.DEFAULT_MLFLOW_TRACKING_URI
+    MLFLOW_EXPERIMENT_NAME: str = constants.DEFAULT_MLFLOW_EXPERIMENT
 
     @field_validator("LOG_LEVEL")
     @classmethod

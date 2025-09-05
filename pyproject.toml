@@ -13,6 +13,7 @@ dependencies = [
   "langgraph-checkpoint-redis>=0.1.1",
   "langgraph>=0.6.6",
   "langmem>=0.0.29",
+  "mlflow>=3.3.2",
   "opentelemetry-distro>=0.57b0",
   "opentelemetry-exporter-otlp>=1.36.0",
   "opentelemetry-instrumentation-aiohttp-server==0.57b0",

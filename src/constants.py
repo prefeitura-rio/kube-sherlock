@@ -50,6 +50,8 @@ class Constants:
     RESET_SUCCESS_MESSAGE: str = "✅ Conversa resetada! Histórico apagado."
     SHERLOCK_COMMAND: str = "!sherlock"
     WHITELIST_DENIED_MESSAGE: str = "Você não está autorizado a usar este bot."
+    DEFAULT_MLFLOW_EXPERIMENT: str = "kube-sherlock"
+    DEFAULT_MLFLOW_TRACKING_URI: str = "http://mlflow:5000"
 
 
 constants = Constants()
