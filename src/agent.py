@@ -91,7 +91,7 @@ class SupervisorWorkerSystem:
     supervisor_model: BaseChatModel = field(default_factory=create_model)
     worker_model: BaseChatModel = field(default_factory=create_model)
     supervisor_prompt: str = field(default_factory=lambda: load_prompt_text("supervisor.md"))
-    worker_prompt: str = field(default_factory=lambda: load_prompt_text("worker.md"))
+    worker_prompt_template: Template = field(default_factory=lambda: load_prompt_template("worker.md"))
     evaluation_prompt: str = field(default_factory=lambda: load_prompt_text("evaluation.md"))
     plan_creation_template: Template = field(default_factory=lambda: load_prompt_template("plan-creation.md"))
     plan_refinement_template: Template = field(default_factory=lambda: load_prompt_template("plan-refinement.md"))
@@ -101,10 +101,12 @@ class SupervisorWorkerSystem:
     def __post_init__(self) -> None:
         self.tools = [*self.input_tools, human_assistance]
 
+        worker_prompt = self.worker_prompt_template.substitute(cluster_info=settings.CLUSTERS or "{}")
+
         self.worker_agent = create_react_agent(
             self.worker_model,
             tools=self.tools,
-            prompt=self.worker_prompt,
+            prompt=worker_prompt,
         )
 
         self.workflow = self.build_workflow()

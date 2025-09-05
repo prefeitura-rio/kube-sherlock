@@ -7,6 +7,7 @@ from .constants import constants
 class Settings(BaseSettings):
     AGENT_TIMEOUT: int = constants.DEFAULT_AGENT_TIMEOUT
     ALLOWED_SHELL_COMMANDS: str = "cat,grep,echo,ls,find,du,kubectl,gcloud"
+    CLUSTERS: str | None = None
     DISCORD_BOT_TOKEN: str | None = None
     GOOGLE_API_KEY: str | None = None
     LOG_LEVEL: str = constants.DEFAULT_LOG_LEVEL
