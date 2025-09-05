@@ -183,16 +183,19 @@ class SupervisorWorkerSystem:
 
             match question:
                 case q if "pod" in q:
-                    actions = ["pods_list", "pods_get (if specific pod name available)"]
+                    actions = ["list-k8s-resources (kind: Pod)", "get-k8s-resource (if specific pod name available)"]
                     outcome = "List and describe pod status and issues using MCP tools"
                 case q if "service" in q:
-                    actions = ["resources_list (kind: Service)", "resources_get (for specific services)"]
+                    actions = ["list-k8s-resources (kind: Service)", "get-k8s-resource (for specific services)"]
                     outcome = "Analyze service configuration and endpoints using MCP tools"
                 case q if "namespace" in q:
-                    actions = ["namespaces_list", "resources_list (kind: Namespace)"]
+                    actions = ["list-k8s-namespaces", "list-k8s-resources (kind: Namespace)"]
                     outcome = "Review namespace configuration using MCP tools"
+                case q if "context" in q or "cluster" in q:
+                    actions = ["list-k8s-contexts", "list-k8s-namespaces (after context confirmation)"]
+                    outcome = "List contexts and help with cluster/context switching using MCP tools"
                 case _:
-                    actions = ["namespaces_list", "pods_list", "events_list"]
+                    actions = ["list-k8s-namespaces", "list-k8s-resources (kind: Pod)", "list-k8s-events"]
                     outcome = "Gather cluster overview using MCP tools and identify potential issues"
 
             fallback_plan = TaskPlan(
