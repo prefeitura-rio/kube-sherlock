@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
@@ -11,7 +9,6 @@ class Settings(BaseSettings):
     ALLOWED_SHELL_COMMANDS: str = "cat,grep,echo,ls,find,du,kubectl,gcloud"
     DISCORD_BOT_TOKEN: str | None = None
     GOOGLE_API_KEY: str | None = None
-    KUBECONFIG_PATH: str = constants.DEFAULT_KUBECONFIG_PATH
     LOG_LEVEL: str = constants.DEFAULT_LOG_LEVEL
     LOG_TRUNCATE_LENGTH: int = constants.DEFAULT_LOG_TRUNCATE_LENGTH
     MAX_WAIT: int = constants.DEFAULT_MAX_WAIT
@@ -53,15 +50,6 @@ class Settings(BaseSettings):
         """Validate that reflection iterations are reasonable"""
         if v < 0 or v > constants.MAX_REFLECTION_ITERATIONS:
             raise ValueError("Reflection iterations must be between 0 and 10")
-        return v
-
-    @field_validator("KUBECONFIG_PATH")
-    @classmethod
-    def validate_kubeconfig_path(cls, v: str) -> str:
-        """Validate that kubeconfig path is absolute"""
-        path = Path(v)
-        if not path.is_absolute():
-            raise ValueError("KUBECONFIG_PATH must be an absolute path")
         return v
 
     @property

@@ -2,7 +2,6 @@ import asyncio
 import sys
 
 import uvloop
-from anyio import Path
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -184,19 +183,6 @@ async def main():
 
     if not settings.REDIS_URL:
         logger.error("`REDIS_URL` is not set. Please add to the environment.")
-        sys.exit(1)
-
-    for attempt in range(settings.MAX_WAIT):
-        if await Path(settings.KUBECONFIG_PATH).exists():
-            logger.info("Kubeconfig found at %s", settings.KUBECONFIG_PATH)
-            break
-
-        if attempt == 0:
-            logger.info("Waiting for kubeconfig at %s...", settings.KUBECONFIG_PATH)
-
-        await asyncio.sleep(1)
-    else:
-        logger.error("Kubeconfig not found at %s after %d seconds", settings.KUBECONFIG_PATH, settings.MAX_WAIT)
         sys.exit(1)
 
     intents = discord.Intents.default()
