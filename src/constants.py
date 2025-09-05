@@ -17,10 +17,11 @@ class EvaluationDecision(str, Enum):
     REFINE = "REFINAR"
 
 
-@dataclass(frozen=True)
-class WorkflowDecision:
-    CONTINUE: str = "continue"
-    FINALIZE: str = "finalize"
+class WorkflowDecision(str, Enum):
+    """Workflow decision options"""
+
+    CONTINUE = "continue"
+    FINALIZE = "finalize"
 
 
 @dataclass(frozen=True)

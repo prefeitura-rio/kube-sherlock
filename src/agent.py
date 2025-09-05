@@ -144,7 +144,7 @@ class SupervisorWorkerSystem:
         workflow.add_conditional_edges(
             "evaluate_result",
             self.should_continue,
-            {WorkflowDecision.CONTINUE: "create_plan", WorkflowDecision.FINALIZE: "finalize"},
+            {WorkflowDecision.CONTINUE.value: "create_plan", WorkflowDecision.FINALIZE.value: "finalize"},
         )
 
         workflow.add_edge("finalize", END)
@@ -291,11 +291,11 @@ class SupervisorWorkerSystem:
 
         match (evaluation, current_iteration >= max_iterations):
             case (eval_val, _) if eval_val == EvaluationDecision.APPROVED.value:
-                return WorkflowDecision.FINALIZE
+                return WorkflowDecision.FINALIZE.value
             case (_, True):
-                return WorkflowDecision.FINALIZE
+                return WorkflowDecision.FINALIZE.value
             case _:
-                return WorkflowDecision.CONTINUE
+                return WorkflowDecision.CONTINUE.value
 
     async def process_question(self, question: str, thread_id: str) -> str:
         """Process a question through the supervisor-worker workflow"""
