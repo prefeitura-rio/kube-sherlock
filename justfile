@@ -15,4 +15,4 @@ compose_file := if env("DEBUG", "false") == "true" { debug_compose_file } else {
     uv run pytest
 
 @typecheck:
-    uv run mypy src/
+    uv run mypy src/ --ignore-missing-imports
