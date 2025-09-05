@@ -10,6 +10,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.prebuilt import create_react_agent
 from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
@@ -88,38 +89,14 @@ class SupervisorWorkerSystem:
 
     def __post_init__(self) -> None:
         self.tools = [*self.input_tools, human_assistance]
+
+        self.worker_agent = create_react_agent(
+            self.worker_model,
+            tools=self.tools,
+            prompt=self.worker_prompt,
+        )
+
         self.workflow = self.build_workflow()
-
-    async def invoke_model(
-        self,
-        model: BaseChatModel,
-        system_prompt: str,
-        user_prompt: str,
-        config: RunnableConfig | None = None,
-        *,
-        bind_tools: bool = False,
-    ) -> str:
-        """Helper method to invoke models with or without tools"""
-        if bind_tools:
-            model_with_tools = model.bind_tools(self.tools)
-            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-            response = await model_with_tools.ainvoke(messages, config=config)
-
-            logger.info(f"Model response type: {type(response)}")
-            logger.info(f"Response content: {response.content}")
-            logger.info(f"Response has tool_calls: {hasattr(response, 'tool_calls')}")
-
-            if hasattr(response, "tool_calls"):
-                logger.info(f"Tool calls: {response.tool_calls}")
-        else:
-            messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-            response = await model.ainvoke(messages, config=config)
-
-        match response.content:
-            case str(content):
-                return content
-            case list(content):
-                return " ".join(str(item) for item in content).strip()
 
     async def invoke_structured_model(
         self,
@@ -151,7 +128,10 @@ class SupervisorWorkerSystem:
         workflow.add_conditional_edges(
             "evaluate_result",
             self.should_continue,
-            {WorkflowDecision.CONTINUE.value: "create_plan", WorkflowDecision.FINALIZE.value: "finalize"},
+            {
+                WorkflowDecision.CONTINUE.value: "create_plan",
+                WorkflowDecision.FINALIZE.value: "finalize",
+            },
         )
 
         workflow.add_edge("finalize", END)
@@ -221,7 +201,7 @@ class SupervisorWorkerSystem:
             return {"current_plan": fallback_plan, "iteration_count": iteration + 1}
 
     async def execute_task_node(self, state: SupervisorState) -> dict:
-        """Worker agent executes the planned task"""
+        """Worker agent executes the planned task using create_react_agent"""
         plan = state["current_plan"]
 
         if not plan:
@@ -247,13 +227,17 @@ class SupervisorWorkerSystem:
             for tool in self.tools:
                 logger.info(f"  Tool: {tool.name}")
 
-            worker_response = await self.invoke_model(
-                self.worker_model,
-                self.worker_prompt,
-                task_prompt,
-                config,
-                bind_tools=True,
-            )
+            # Use the create_react_agent instead of manual tool execution
+            worker_state = {"messages": [HumanMessage(content=task_prompt)]}
+
+            result = await self.worker_agent.ainvoke(worker_state, config)
+
+            # Extract the final response from the messages
+            if result and "messages" in result:
+                final_message = result["messages"][-1]
+                worker_response = final_message.content if hasattr(final_message, "content") else str(final_message)
+            else:
+                worker_response = "No response from worker agent"
 
             logger.info(f"Worker completed: {len(worker_response)} chars")
             logger.info(f"Worker response: {worker_response[:500]}...")
