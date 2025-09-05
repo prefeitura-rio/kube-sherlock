@@ -195,9 +195,11 @@ Responda com sua orientação para continuar.
 ### Data Flow
 
 ```
-Discord Message → Validation → Supervisor → Worker → Evaluation → Human Review → Response
-     ↓               ↓           ↓           ↓         ↓           ↓             ↓
-User Command → Whitelist → Plan Creation → Execute → Review → (If Needed) → Discord
+Discord Message → Validation → Supervisor Planning → Worker Execution → Supervisor Evaluation → Response
+     ↓               ↓               ↓                    ↓                  ↓              ↓
+User Command → Whitelist → Create/Refine Plan → Execute with Tools → Quality Review → Discord
+                                ↑                                           ↓
+                            Feedback Loop ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 ```
 
 ### Memory Management
