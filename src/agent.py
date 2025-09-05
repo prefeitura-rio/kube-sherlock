@@ -47,9 +47,9 @@ class TaskPlan(BaseModel):
         description="Concrete expected result",
     )
 
-    kubectl_commands: list[str] = Field(
+    actions: list[str] = Field(
         default_factory=list,
-        description="Specific kubectl commands relevant to the task",
+        description="Specific MCP tools or actions relevant to the task",
     )
 
     verification_steps: list[str] = Field(
@@ -177,24 +177,21 @@ class SupervisorWorkerSystem:
         except Exception as e:
             logger.error(f"Plan creation failed: {e}")
 
-            question_lower = state["original_question"].lower()
+            question = state["original_question"].lower()
 
-            if "pod" in question_lower:
-                commands = ["kubectl get pods --all-namespaces", "kubectl describe pods"]
-                outcome = "List and describe pod status and issues"
-            elif "service" in question_lower:
-                commands = ["kubectl get services --all-namespaces", "kubectl describe services"]
-                outcome = "Analyze service configuration and endpoints"
-            elif "namespace" in question_lower:
-                commands = ["kubectl get namespaces", "kubectl describe namespaces"]
-                outcome = "Review namespace configuration and resource quotas"
-            else:
-                commands = [
-                    "kubectl cluster-info",
-                    "kubectl get nodes",
-                    "kubectl get pods --all-namespaces --show-labels",
-                ]
-                outcome = "Gather cluster overview and identify potential issues"
+            match question:
+                case q if "pod" in q:
+                    actions = ["pods_list", "pods_get (if specific pod name available)"]
+                    outcome = "List and describe pod status and issues using MCP tools"
+                case q if "service" in q:
+                    actions = ["resources_list (kind: Service)", "resources_get (for specific services)"]
+                    outcome = "Analyze service configuration and endpoints using MCP tools"
+                case q if "namespace" in q:
+                    actions = ["namespaces_list", "resources_list (kind: Namespace)"]
+                    outcome = "Review namespace configuration using MCP tools"
+                case _:
+                    actions = ["namespaces_list", "pods_list", "events_list"]
+                    outcome = "Gather cluster overview using MCP tools and identify potential issues"
 
             fallback_plan = TaskPlan(
                 task_description=(
@@ -202,7 +199,7 @@ class SupervisorWorkerSystem:
                     f"(fallback mode due to planning error: {str(e)[:50]})"
                 ),
                 expected_outcome=outcome,
-                kubectl_commands=commands,
+                actions=actions,
                 verification_steps=[
                     "Verify commands executed successfully",
                     "Check output contains real data, not placeholder text",
@@ -219,12 +216,12 @@ class SupervisorWorkerSystem:
         if not plan:
             return {"worker_result": "Error: Plan was not created"}
 
-        commands = "\n".join(f"- {cmd}" for cmd in plan.kubectl_commands)
+        actions = "\n".join(f"- {cmd}" for cmd in plan.actions)
         steps = "\n".join(f"- {step}" for step in plan.verification_steps)
 
         task_prompt = self.task_execution_template.substitute(
             task_description=plan.task_description,
-            commands=commands,
+            actions=actions,
             expected_outcome=plan.expected_outcome,
             verification_steps=steps,
         )
