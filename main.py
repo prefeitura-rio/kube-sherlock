@@ -131,11 +131,6 @@ class SherlockBot(discord.Client):
         try:
             self.tools = await self.client.get_tools()
 
-            logger.info("MCP tools available:")
-
-            for tool in self.tools:
-                logger.info("  - %s: %s", tool.name, tool.description)
-
             if self.supervisor_system is None:
                 self.supervisor_system = SupervisorWorkerSystem(self.store, self.checkpointer, self.tools)
 

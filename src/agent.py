@@ -36,14 +36,25 @@ class TaskPlan(BaseModel):
     """Structured plan for the worker agent"""
 
     task_description: str = Field(
-        min_length=10, max_length=1000, description="Specific, actionable task description - not generic"
+        min_length=10,
+        max_length=1000,
+        description="Specific, actionable task description - not generic",
     )
-    expected_outcome: str = Field(min_length=5, max_length=500, description="Concrete expected result")
+
+    expected_outcome: str = Field(
+        min_length=5,
+        max_length=500,
+        description="Concrete expected result",
+    )
+
     kubectl_commands: list[str] = Field(
-        default_factory=list, description="Specific kubectl commands relevant to the task"
+        default_factory=list,
+        description="Specific kubectl commands relevant to the task",
     )
+
     verification_steps: list[str] = Field(
-        default_factory=list, description="Steps to verify the task was completed correctly"
+        default_factory=list,
+        description="Steps to verify the task was completed correctly",
     )
 
 
@@ -167,6 +178,7 @@ class SupervisorWorkerSystem:
             logger.error(f"Plan creation failed: {e}")
 
             question_lower = state["original_question"].lower()
+
             if "pod" in question_lower:
                 commands = ["kubectl get pods --all-namespaces", "kubectl describe pods"]
                 outcome = "List and describe pod status and issues"
@@ -224,20 +236,25 @@ class SupervisorWorkerSystem:
             logger.info(f"Worker executing with prompt: {task_prompt[:200]}...")
             logger.info(f"Available tools count: {len(self.tools)}")
 
-            for tool in self.tools:
-                logger.info(f"  Tool: {tool.name}")
-
-            # Use the create_react_agent instead of manual tool execution
             worker_state = {"messages": [HumanMessage(content=task_prompt)]}
 
             result = await self.worker_agent.ainvoke(worker_state, config)
 
-            # Extract the final response from the messages
-            if result and "messages" in result:
-                final_message = result["messages"][-1]
-                worker_response = final_message.content if hasattr(final_message, "content") else str(final_message)
-            else:
-                worker_response = "No response from worker agent"
+            worker_response = "No response from worker agent"
+
+            match result:
+                case {"messages": messages} if messages:
+                    final_message = messages[-1]
+
+                    match getattr(final_message, "content", None):
+                        case list(content):
+                            worker_response = " ".join(str(item) for item in content)
+                        case str(content) | content if content is not None:
+                            worker_response = str(content)
+                        case None:
+                            worker_response = str(final_message)
+                case _:
+                    pass
 
             logger.info(f"Worker completed: {len(worker_response)} chars")
             logger.info(f"Worker response: {worker_response[:500]}...")
