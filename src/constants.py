@@ -36,7 +36,7 @@ class Constants:
     DEFAULT_LOG_LEVEL: str = "INFO"
     DEFAULT_LOG_TRUNCATE_LENGTH: int = 100
     DEFAULT_MAX_WAIT: int = 30
-    DEFAULT_MODEL_NAME: str = "gemini-2.5-flash"
+    DEFAULT_MODEL_NAME: str = "gemini-2.5-flash-lite"
     DEFAULT_RECURSION_LIMIT: int = 50
     DEFAULT_REFLECTION_ITERATIONS: int = 3
     DISCORD_CHAR_LIMIT: int = 2000

@@ -11,7 +11,6 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
-from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
@@ -84,7 +83,6 @@ class SupervisorState(TypedDict):
 class SupervisorWorkerSystem:
     """Supervisor-Worker agent system with feedback loops"""
 
-    store: BaseStore
     checkpointer: BaseCheckpointSaver
     input_tools: list[BaseTool]
     workflow: CompiledStateGraph = field(init=False)
@@ -107,6 +105,7 @@ class SupervisorWorkerSystem:
             self.worker_model,
             tools=self.tools,
             prompt=worker_prompt,
+            checkpointer=self.checkpointer,
         )
 
         self.workflow = self.build_workflow()
@@ -239,7 +238,6 @@ class SupervisorWorkerSystem:
             logger.info(f"Available tools count: {len(self.tools)}")
 
             worker_state = {"messages": [HumanMessage(content=task_prompt)]}
-
             result = await self.worker_agent.ainvoke(worker_state, config)
 
             worker_response = "No response from worker agent"

@@ -6,7 +6,6 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.errors import GraphInterrupt
-from langgraph.store.redis.aio import AsyncRedisStore
 from langgraph.types import Command
 
 import discord
@@ -20,11 +19,10 @@ from src.settings import settings
 
 
 class SherlockBot(discord.Client):
-    def __init__(self, intents: discord.Intents, store: AsyncRedisStore, checkpointer: AsyncRedisSaver):
+    def __init__(self, intents: discord.Intents, checkpointer: AsyncRedisSaver):
         super().__init__(intents=intents)
 
         self.client = get_mcp_client()
-        self.store = store
         self.checkpointer = checkpointer
         self.supervisor_system: SupervisorWorkerSystem | None = None
         self.tools: list[BaseTool] | None = None
@@ -126,13 +124,15 @@ class SherlockBot(discord.Client):
 
     async def on_ready(self):
         logger.info("%s has connected to Discord", self.user)
-        logger.info("Initializing MCP agent...")
+        logger.info("Initializing Redis and MCP agent...")
 
         try:
+            await self.checkpointer.setup()
+
             self.tools = await self.client.get_tools()
 
             if self.supervisor_system is None:
-                self.supervisor_system = SupervisorWorkerSystem(self.store, self.checkpointer, self.tools)
+                self.supervisor_system = SupervisorWorkerSystem(self.checkpointer, self.tools)
 
             logger.info("Supervisor-worker system initialization complete.")
         except Exception as e:
@@ -183,11 +183,8 @@ async def main():
     intents = discord.Intents.default()
     intents.message_content = True
 
-    async with (
-        AsyncRedisStore.from_conn_string(settings.REDIS_URL) as store,
-        AsyncRedisSaver.from_conn_string(settings.REDIS_URL) as checkpointer,
-    ):
-        bot = SherlockBot(intents, store, checkpointer)
+    async with AsyncRedisSaver.from_conn_string(settings.REDIS_URL) as checkpointer:
+        bot = SherlockBot(intents, checkpointer)
 
         await asyncio.gather(run_http_server(), bot.start(settings.DISCORD_BOT_TOKEN))
 
