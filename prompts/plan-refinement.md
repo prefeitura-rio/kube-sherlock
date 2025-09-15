@@ -1,78 +1,78 @@
-# Plan Refinement Based on Evaluation Feedback
+# Refinamento de Plano Baseado no Feedback de Avaliação
 
-## Context Review
+## Revisão de Contexto
 
-- **Original Question**: $question
-- **Previous Plan**: $previous_plan
-- **Previous Result**: $previous_result
-- **Supervisor Feedback**: $feedback
+- **Pergunta Original**: $question
+- **Plano Anterior**: $previous_plan
+- **Resultado Anterior**: $previous_result
+- **Feedback do Supervisor**: $feedback
 
-## Refinement Strategy
+## Estratégia de Refinamento
 
-### 1. Analyze the Gap
+### 1. Analisar a Lacuna
 
-Identify what was missing or inadequate:
+Identifique o que estava faltando ou inadequado:
 
-- **Incomplete data collection**: Missing MCP tools for full diagnosis
-- **Wrong focus**: Addressing symptoms instead of root cause
-- **Insufficient detail**: Tools too broad or not specific enough
-- **Missing verification**: No validation of findings or next steps
+- **Coleta de dados incompleta**: Ferramentas MCP faltando para diagnóstico completo
+- **Foco errado**: Abordando sintomas em vez de causa raiz
+- **Detalhe insuficiente**: Ferramentas muito amplas ou não específicas o suficiente
+- **Verificação ausente**: Nenhuma validação de achados ou próximos passos
 
-### 2. Common Refinement Patterns
+### 2. Padrões de Refinamento Comuns
 
-#### Insufficient Detail → Deeper Investigation
+#### Detalhe Insuficiente → Investigação Mais Profunda
 
-- Add `resources_get` calls for specific resources
-- Include `events_list` for recent activities
-- Add `pods_log` for specific pods
+- Adicione chamadas `get-k8s-resource` para recursos específicos
+- Inclua `list-k8s-events` para atividades recentes
+- Adicione `get-k8s-pod-logs` para pods específicos
 
-#### Wrong Scope → Correct Targeting
+#### Escopo Errado → Direcionamento Correto
 
-- Use proper namespaces instead of cluster-wide searches
-- Apply label selectors for precise resource targeting
-- Focus on specific workload types (deployment vs pod vs service)
+- Use namespaces apropriados em vez de buscas em todo o cluster
+- Aplique seletores de label para direcionamento preciso de recursos
+- Foque em tipos específicos de workload (deployment vs pod vs service)
 
-#### Missing Context → Complete Picture
+#### Contexto Ausente → Quadro Completo
 
-- Add related resource checks (services → endpoints → pods)
-- Include resource utilization (`pods_top`)
-- Check dependencies (ingress → service → pods → nodes)
+- Adicione verificações de recursos relacionados (services → endpoints → pods)
+- Inclua utilização de recursos (via `list-k8s-resources` e `get-k8s-resource`)
+- Verifique dependências (ingress → service → pods → nodes)
 
-#### Inadequate Verification → Comprehensive Validation
+#### Verificação Inadequada → Validação Abrangente
 
-- Add verification commands to confirm findings
-- Include manual execution steps for complex scenarios
-- Provide alternative approaches if primary method fails
+- Adicione comandos de verificação para confirmar achados
+- Inclua passos de execução manual para cenários complexos
+- Forneça abordagens alternativas se o método primário falhar
 
-### 3. Refinement Execution
+### 3. Execução do Refinamento
 
-Based on the feedback, create an IMPROVED plan that:
+Baseado no feedback, crie um plano MELHORADO que:
 
-#### Addresses Specific Feedback
+#### Aborde Feedback Específico
 
-- Fix the exact issues mentioned in supervisor feedback
-- Add missing MCP tools or data collection steps
-- Correct tool parameters or targeting
+- Corrija os problemas exatos mencionados no feedback do supervisor
+- Adicione ferramentas MCP ausentes ou passos de coleta de dados
+- Corrija parâmetros de ferramentas ou direcionamento
 
-#### Enhances Diagnostic Depth
+#### Melhore a Profundidade Diagnóstica
 
-- Go deeper than previous attempt
-- Include additional context-gathering MCP tools
-- Add verification and validation steps
+- Vá mais fundo que a tentativa anterior
+- Inclua ferramentas MCP adicionais de coleta de contexto
+- Adicione passos de verificação e validação
 
-#### Ensures Completeness
+#### Garanta Completude
 
-- Cover all aspects of the original question
-- Include proper error handling approaches
-- Provide clear expected outcomes
+- Cubra todos os aspectos da pergunta original
+- Inclua abordagens adequadas de tratamento de erros
+- Forneça resultados esperados claros
 
-## Required Output
+## Saída Obrigatória
 
-Create a refined TaskPlan with:
+Crie um TaskPlan refinado com:
 
-1. **Enhanced Task Description**: More specific and comprehensive than previous
-2. **Targeted MCP Tools**: Addressing feedback gaps with proper parameters
-3. **Clear Expected Outcome**: What specific data/insights we expect to gather
-4. **Robust Verification Steps**: How to validate findings and ensure quality
+1. **Descrição de Tarefa Melhorada**: Mais específica e abrangente que a anterior
+2. **Ferramentas MCP Direcionadas**: Abordando lacunas do feedback com parâmetros adequados
+3. **Resultado Esperado Claro**: Quais dados/insights específicos esperamos coletar
+4. **Passos de Verificação Robustos**: Como validar achados e garantir qualidade
 
-Focus on resolving the supervisor's concerns while maintaining diagnostic rigor.
+Foque em resolver as preocupações do supervisor mantendo rigor diagnóstico.

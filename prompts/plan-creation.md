@@ -1,47 +1,53 @@
-Create a context-aware execution plan for: $question
+Crie um plano de execução consciente do contexto para: $question
 
-## Context Analysis First
+## Análise de Contexto Primeiro
 
-Identify the problem domain:
+Identifique o domínio do problema:
 
-- **Pod Issues**: CrashLoopBackOff, ImagePullBackOff, Pending, OOMKilled
-- **Service Issues**: Connection failures, DNS resolution, load balancing
-- **Network Issues**: Ingress, NetworkPolicy, CNI problems
-- **Resource Issues**: CPU/Memory limits, storage, quotas
-- **Workload Issues**: Deployments, StatefulSets, Jobs, DaemonSets
+- **Problemas de Pod**: CrashLoopBackOff, ImagePullBackOff, Pending, OOMKilled
+- **Problemas de Serviço**: Falhas de conexão, resolução DNS, balanceamento de carga
+- **Problemas de Rede**: Ingress, NetworkPolicy, problemas CNI
+- **Problemas de Recursos**: Limites CPU/Memória, armazenamento, quotas
+- **Problemas de Workload**: Deployments, StatefulSets, Jobs, DaemonSets
 
-## Planning Guidelines by Context
+## Diretrizes de Planejamento por Contexto
 
-### Pod Problems
+### Problemas de Pod
 
-MCP Tools: `pods_list`, `pods_get`, `pods_log`, `events_list`
-Focus: Events, resource constraints, image availability, probes
+Ferramentas MCP: `list-k8s-resources`, `get-k8s-resource`, `get-k8s-pod-logs`, `list-k8s-events`
+Foco: Eventos, restrições de recursos, disponibilidade de imagem, probes
 
-### Service/Network Problems
+### Problemas de Serviço/Rede
 
-MCP Tools: `resources_list` (Service, Endpoints, Ingress), `resources_get`
-Focus: Endpoints, selectors, ports, DNS resolution
+Ferramentas MCP: `list-k8s-resources` (Service, Endpoints, Ingress), `get-k8s-resource`
+Foco: Endpoints, seletores, portas, resolução DNS
 
-### Resource Problems
+### Problemas de Recursos
 
-MCP Tools: `pods_top`, `resources_list` (Node), `resources_get`
-Focus: Resource utilization, limits, availability
+Ferramentas MCP: `list-k8s-resources` (Node), `get-k8s-resource`
+Foco: Utilização de recursos, limites, disponibilidade
 
-### Workload Problems
+### Problemas de Workload
 
-MCP Tools: `resources_list` (Deployment, StatefulSet, DaemonSet, Job), `resources_get`
-Focus: Replica status, update strategy, configuration
+Ferramentas MCP: `list-k8s-resources` (Deployment, StatefulSet, DaemonSet, Job), `get-k8s-resource`
+Foco: Status de réplicas, estratégia de atualização, configuração
 
-## Required Plan Structure
+### Investigações de Erros (erros 500, crashes, falhas)
 
-1. **Task Description**: Specific, actionable task (not generic troubleshooting)
-2. **MCP Tools**: Specific tools with required parameters
-3. **Expected Outcome**: Concrete data to gather or verify
-4. **Verification Steps**: How to validate the findings and ensure completeness
+Ferramentas MCP: `list-k8s-resources` (Pod), `get-k8s-pod-logs`, `list-k8s-events`
+Foco: IMEDIATAMENTE verifique logs de containers de aplicação, erros recentes, stack traces
+Prioridade: Obter logs primeiro, depois status do deployment, depois eventos
 
-## Quality Requirements
+## Estrutura de Plano Obrigatória
 
-- Tools must be READ-ONLY (list, get, log operations)
-- Include namespace specifications when relevant
-- Use label selectors for precise targeting
-- Prioritize high-impact diagnostic commands first
+1. **Descrição da Tarefa**: Tarefa específica e acionável (não troubleshooting genérico)
+2. **Ferramentas MCP**: Ferramentas específicas com parâmetros obrigatórios
+3. **Resultado Esperado**: Dados concretos para coletar ou verificar
+4. **Passos de Verificação**: Como validar os achados e garantir completude
+
+## Requisitos de Qualidade
+
+- Ferramentas devem ser SOMENTE-LEITURA (operações list, get, log)
+- Inclua especificações de namespace quando relevante
+- Use seletores de label para direcionamento preciso
+- Priorize comandos de diagnóstico de alto impacto primeiro
