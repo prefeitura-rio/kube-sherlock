@@ -9,9 +9,17 @@ from .settings import settings
 
 def create_model() -> RunnableWithFallbacks[LanguageModelInput, BaseMessage]:
     try:
-        primary_model = init_chat_model(settings.MODEL_NAME, model_provider="google_genai", temperature=0.1)
+        primary_model = init_chat_model(
+            settings.MODEL_NAME,
+            model_provider="google_genai",
+            temperature=0.1,
+        )
 
-        fallback_model = init_chat_model(settings.FALLBACK_MODEL_NAME, model_provider="google_genai", temperature=0.1)
+        fallback_model = init_chat_model(
+            settings.FALLBACK_MODEL_NAME,
+            model_provider="google_genai",
+            temperature=0.1,
+        )
 
         model_with_fallback = RunnableWithFallbacks(runnable=primary_model, fallbacks=[fallback_model])
 

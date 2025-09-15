@@ -39,7 +39,7 @@ class Constants:
     DEFAULT_MODEL_NAME: str = "gemini-2.5-flash-lite"
     DEFAULT_FALLBACK_MODEL_NAME: str = "gemini-2.5-flash"
     DEFAULT_RECURSION_LIMIT: int = 50
-    DEFAULT_REFLECTION_ITERATIONS: int = 3
+    DEFAULT_REFLECTION_ITERATIONS: int = 2
     DISCORD_CHAR_LIMIT: int = 2000
     DM_DISABLED_MESSAGE: str = "DMs não estão habilitadas para este bot."
     KUBECONFIG_MCP_PATH: str = "/root/.kube/config"
