@@ -1,78 +1,39 @@
-# Refinamento de Plano Baseado no Feedback de Avaliação
+Refine o plano baseado no feedback:
 
-## Revisão de Contexto
+**Contexto:**
 
-- **Pergunta Original**: $question
-- **Plano Anterior**: $previous_plan
-- **Resultado Anterior**: $previous_result
-- **Feedback do Supervisor**: $feedback
+- Pergunta: $question
+- Plano anterior: $previous_plan
+- Resultado anterior: $previous_result
+- Feedback: $feedback
 
-## Estratégia de Refinamento
+## Padrões de Refinamento
 
-### 1. Analisar a Lacuna
+**Dados incompletos** → Adicione ferramentas MCP específicas:
 
-Identifique o que estava faltando ou inadequado:
+- `get-k8s-resource` para recursos específicos
+- `list-k8s-events` para atividade recente
+- `get-k8s-pod-logs` para pods problemáticos
 
-- **Coleta de dados incompleta**: Ferramentas MCP faltando para diagnóstico completo
-- **Foco errado**: Abordando sintomas em vez de causa raiz
-- **Detalhe insuficiente**: Ferramentas muito amplas ou não específicas o suficiente
-- **Verificação ausente**: Nenhuma validação de achados ou próximos passos
+**Escopo errado** → Foque melhor:
 
-### 2. Padrões de Refinamento Comuns
+- Use namespaces específicos vs cluster-wide
+- Aplique seletores de label precisos
+- Direcione tipos de workload corretos
 
-#### Detalhe Insuficiente → Investigação Mais Profunda
+**Falta contexto** → Adicione relacionados:
 
-- Adicione chamadas `get-k8s-resource` para recursos específicos
-- Inclua `list-k8s-events` para atividades recentes
-- Adicione `get-k8s-pod-logs` para pods específicos
+- Verifique recursos relacionados (service → endpoints → pods)
+- Inclua dependências (ingress → service → pods)
+- Adicione verificação de recursos
 
-#### Escopo Errado → Direcionamento Correto
+## Saída Refinada
 
-- Use namespaces apropriados em vez de buscas em todo o cluster
-- Aplique seletores de label para direcionamento preciso de recursos
-- Foque em tipos específicos de workload (deployment vs pod vs service)
+Crie TaskPlan melhorado com:
 
-#### Contexto Ausente → Quadro Completo
+1. **Tarefa mais específica** que a anterior
+2. **Ferramentas MCP adicionais** para cobrir lacunas
+3. **Resultado esperado claro**
+4. **Verificação robusta** dos achados
 
-- Adicione verificações de recursos relacionados (services → endpoints → pods)
-- Inclua utilização de recursos (via `list-k8s-resources` e `get-k8s-resource`)
-- Verifique dependências (ingress → service → pods → nodes)
-
-#### Verificação Inadequada → Validação Abrangente
-
-- Adicione comandos de verificação para confirmar achados
-- Inclua passos de execução manual para cenários complexos
-- Forneça abordagens alternativas se o método primário falhar
-
-### 3. Execução do Refinamento
-
-Baseado no feedback, crie um plano MELHORADO que:
-
-#### Aborde Feedback Específico
-
-- Corrija os problemas exatos mencionados no feedback do supervisor
-- Adicione ferramentas MCP ausentes ou passos de coleta de dados
-- Corrija parâmetros de ferramentas ou direcionamento
-
-#### Melhore a Profundidade Diagnóstica
-
-- Vá mais fundo que a tentativa anterior
-- Inclua ferramentas MCP adicionais de coleta de contexto
-- Adicione passos de verificação e validação
-
-#### Garanta Completude
-
-- Cubra todos os aspectos da pergunta original
-- Inclua abordagens adequadas de tratamento de erros
-- Forneça resultados esperados claros
-
-## Saída Obrigatória
-
-Crie um TaskPlan refinado com:
-
-1. **Descrição de Tarefa Melhorada**: Mais específica e abrangente que a anterior
-2. **Ferramentas MCP Direcionadas**: Abordando lacunas do feedback com parâmetros adequados
-3. **Resultado Esperado Claro**: Quais dados/insights específicos esperamos coletar
-4. **Passos de Verificação Robustos**: Como validar achados e garantir qualidade
-
-Foque em resolver as preocupações do supervisor mantendo rigor diagnóstico.
+Resolva as preocupações específicas do supervisor.

@@ -1,27 +1,15 @@
-# Contexto de Avaliação
+**Pergunta:** $original_question
 
-## Pergunta Original do Usuário
-$original_question
+**Plano:** $plan_description
 
-## Descrição da Tarefa Planejada
-$plan_description
+**Resposta:** $worker_result
 
-## Resposta do Agente Worker
-$worker_result
+## Avalie contra:
 
-## Critérios de Avaliação
+1. **Completude**: Responde pergunta totalmente?
+2. **Precisão**: Dados reais do cluster, não fabricados?
+3. **Acionabilidade**: Próximos passos claros?
+4. **Profundidade**: Detalhe suficiente para K8s troubleshooting?
+5. **Comunicação**: Português claro, ≤2000 chars?
 
-Por favor, avalie a resposta do worker contra estes pontos-chave:
-
-1. **Completude**: Responde completamente à pergunta original?
-2. **Precisão**: Usa dados reais do cluster, nenhuma informação fabricada?
-3. **Acionabilidade**: Fornece próximos passos claros ou achados específicos?
-4. **Profundidade Técnica**: Detalhe suficiente para troubleshooting de Kubernetes?
-5. **Comunicação**: Português claro e conciso apropriado para Discord?
-
-## Notas de Contexto
-
-- Este é um assistente de debug do Kubernetes
-- Respostas devem ser práticas e imediatamente úteis
-- Foque em dados reais do cluster sobre conselhos genéricos
-- Considere o limite de caracteres do Discord (2000 chars)
+Foque em dados reais vs conselhos genéricos.

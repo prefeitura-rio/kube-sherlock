@@ -1,53 +1,36 @@
-Crie um plano de execução consciente do contexto para: $question
+Crie um plano de execução para: $question
 
-## Análise de Contexto Primeiro
+## Contexto por Tipo de Problema
 
-Identifique o domínio do problema:
+**Problemas de Pod** (CrashLoopBackOff, ImagePullBackOff, Pending):
 
-- **Problemas de Pod**: CrashLoopBackOff, ImagePullBackOff, Pending, OOMKilled
-- **Problemas de Serviço**: Falhas de conexão, resolução DNS, balanceamento de carga
-- **Problemas de Rede**: Ingress, NetworkPolicy, problemas CNI
-- **Problemas de Recursos**: Limites CPU/Memória, armazenamento, quotas
-- **Problemas de Workload**: Deployments, StatefulSets, Jobs, DaemonSets
+- Ferramentas: `list-k8s-resources`, `get-k8s-resource`, `get-k8s-pod-logs`, `list-k8s-events`
+- Foco: Eventos, logs de erro, restrições de recursos
 
-## Diretrizes de Planejamento por Contexto
+**Problemas de Serviço/Rede** (conectividade, DNS):
 
-### Problemas de Pod
+- Ferramentas: `list-k8s-resources` (Service, Endpoints), `get-k8s-resource`
+- Foco: Endpoints, seletores, portas
 
-Ferramentas MCP: `list-k8s-resources`, `get-k8s-resource`, `get-k8s-pod-logs`, `list-k8s-events`
-Foco: Eventos, restrições de recursos, disponibilidade de imagem, probes
+**Problemas de Workload** (deployments, scaling):
 
-### Problemas de Serviço/Rede
+- Ferramentas: `list-k8s-resources` (Deployment), `get-k8s-resource`
+- Foco: Status de réplicas, estratégia de atualização
 
-Ferramentas MCP: `list-k8s-resources` (Service, Endpoints, Ingress), `get-k8s-resource`
-Foco: Endpoints, seletores, portas, resolução DNS
+**Investigações de Erros** (500s, crashes):
 
-### Problemas de Recursos
+- Prioridade: `get-k8s-pod-logs` PRIMEIRO, depois `list-k8s-events`
+- Foco: Stack traces, erros recentes em logs de aplicação
 
-Ferramentas MCP: `list-k8s-resources` (Node), `get-k8s-resource`
-Foco: Utilização de recursos, limites, disponibilidade
+## Estrutura Obrigatória do Plano
 
-### Problemas de Workload
+1. **Descrição da Tarefa**: Ação específica e acionável
+2. **Ferramentas MCP**: Lista exata com preferência para ferramentas MCP
+3. **Resultado Esperado**: Dados concretos para coletar
+4. **Passos de Verificação**: Como validar completude dos achados
 
-Ferramentas MCP: `list-k8s-resources` (Deployment, StatefulSet, DaemonSet, Job), `get-k8s-resource`
-Foco: Status de réplicas, estratégia de atualização, configuração
+## Importantes:
 
-### Investigações de Erros (erros 500, crashes, falhas)
-
-Ferramentas MCP: `list-k8s-resources` (Pod), `get-k8s-pod-logs`, `list-k8s-events`
-Foco: IMEDIATAMENTE verifique logs de containers de aplicação, erros recentes, stack traces
-Prioridade: Obter logs primeiro, depois status do deployment, depois eventos
-
-## Estrutura de Plano Obrigatória
-
-1. **Descrição da Tarefa**: Tarefa específica e acionável (não troubleshooting genérico)
-2. **Ferramentas MCP**: Ferramentas específicas com parâmetros obrigatórios
-3. **Resultado Esperado**: Dados concretos para coletar ou verificar
-4. **Passos de Verificação**: Como validar os achados e garantir completude
-
-## Requisitos de Qualidade
-
-- Ferramentas devem ser SOMENTE-LEITURA (operações list, get, log)
-- Inclua especificações de namespace quando relevante
-- Use seletores de label para direcionamento preciso
-- Priorize comandos de diagnóstico de alto impacto primeiro
+- Para pods parciais (ex: "letta"): inclua `list-k8s-resources` para encontrar nome completo
+- Prefira sempre ferramentas MCP; sugira kubectl apenas como último recurso
+- Seja específico sobre namespace e contexto quando relevante
