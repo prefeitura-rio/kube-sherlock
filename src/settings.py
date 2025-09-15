@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     LOG_TRUNCATE_LENGTH: int = constants.DEFAULT_LOG_TRUNCATE_LENGTH
     MAX_WAIT: int = constants.DEFAULT_MAX_WAIT
     MODEL_NAME: str = constants.DEFAULT_MODEL_NAME
+    FALLBACK_MODEL_NAME: str = constants.DEFAULT_FALLBACK_MODEL_NAME
     RECURSION_LIMIT: int = constants.DEFAULT_RECURSION_LIMIT
     REDIS_URL: str | None = None
     REFLECTION_ITERATIONS: int = constants.DEFAULT_REFLECTION_ITERATIONS

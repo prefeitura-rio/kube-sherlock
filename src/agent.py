@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from string import Template
 from typing import Annotated, Type, TypedDict, TypeVar, cast
 
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.runnables import RunnableConfig
+from langchain_core.language_models import LanguageModelInput
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig, RunnableWithFallbacks
 from langchain_core.tools import BaseTool, tool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
@@ -86,8 +86,8 @@ class SupervisorWorkerSystem:
     checkpointer: BaseCheckpointSaver
     input_tools: list[BaseTool]
     workflow: CompiledStateGraph = field(init=False)
-    supervisor_model: BaseChatModel = field(default_factory=create_model)
-    worker_model: BaseChatModel = field(default_factory=create_model)
+    supervisor_model: RunnableWithFallbacks[LanguageModelInput, BaseMessage] = field(default_factory=create_model)
+    worker_model: RunnableWithFallbacks[LanguageModelInput, BaseMessage] = field(default_factory=create_model)
     supervisor_prompt: str = field(default_factory=lambda: load_prompt_text("supervisor.md"))
     worker_prompt_template: Template = field(default_factory=lambda: load_prompt_template("worker.md"))
     evaluation_prompt: str = field(default_factory=lambda: load_prompt_text("evaluation.md"))
@@ -112,7 +112,7 @@ class SupervisorWorkerSystem:
 
     async def invoke_structured_model(
         self,
-        model: BaseChatModel,
+        model: RunnableWithFallbacks[LanguageModelInput, BaseMessage],
         model_type: Type[T],
         system_prompt: str,
         user_prompt: str,
@@ -261,8 +261,9 @@ class SupervisorWorkerSystem:
 
             return {"worker_result": worker_response}
         except Exception as e:
-            logger.error(f"Worker execution failed: {e}")
-            return {"worker_result": f"Error: {e}"}
+            error_msg = str(e)
+            logger.error(f"Worker execution failed: {error_msg}")
+            return {"worker_result": f"Erro durante execução: {error_msg}"}
 
     async def evaluate_result_node(self, state: SupervisorState) -> dict:
         """Supervisor evaluates worker result"""
