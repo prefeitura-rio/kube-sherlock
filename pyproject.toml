@@ -21,6 +21,7 @@ dependencies = [
   "opentelemetry-instrumentation-logging==0.57b0",
   "opentelemetry-instrumentation-redis==0.57b0",
   "opentelemetry-instrumentation-system-metrics>=0.57b0",
+  "pydantic-ai-slim[dbos,evals,mcp,vertexai]>=1.0.12",
   "pydantic-settings>=2.10.1",
   "pydantic>=2.11.7",
   "uvloop>=0.21.0",
