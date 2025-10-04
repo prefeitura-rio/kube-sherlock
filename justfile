@@ -12,7 +12,7 @@ compose_file := if env("DEBUG", "false") == "true" { debug_compose_file } else {
     docker compose -f {{ compose_file }} down --remove-orphans
 
 @test:
-    uv run pytest
+    uv run pytest tests/ -v --tb=short
 
 @typecheck:
     uv run mypy src/ --ignore-missing-imports
