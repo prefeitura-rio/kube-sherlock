@@ -1,13 +1,4 @@
 services:
-  redis:
-    container_name: redis
-    restart: unless-stopped
-    image: redis/redis-stack:latest
-    environment:
-      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
-
   mlflow:
     container_name: mlflow
     restart: unless-stopped
@@ -26,7 +17,6 @@ services:
       - kube_config:/root/.kube
     ports:
       - "8080:8080"
-    depends_on: [redis]
     develop:
       watch:
         - action: sync
@@ -46,5 +36,4 @@ services:
           path: ./Dockerfile
 
 volumes:
-  redis_data:
   kube_config:

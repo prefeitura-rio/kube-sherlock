@@ -1,13 +1,4 @@
 services:
-  redis:
-    container_name: redis
-    restart: always
-    image: redis/redis-stack:latest
-    environment:
-      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
-
   kube-sherlock:
     container_name: kube-sherlock
     restart: "no"
@@ -33,7 +24,6 @@ services:
     ports:
       - "5678:5678"
       - "8080:8080"
-    depends_on: [redis]
     develop:
       watch:
         - action: sync
@@ -53,5 +43,4 @@ services:
           path: ./Dockerfile
 
 volumes:
-  redis_data:
   kube_config:
