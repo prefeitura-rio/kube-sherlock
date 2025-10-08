@@ -1,11 +1,10 @@
 import logging
-import os
 
-from .constants import constants
+from .settings import settings
 
-logger = logging.getLogger(constants.LOGGER_NAME)
-logger.setLevel(getattr(logging, os.getenv("LOG_LEVEL", constants.DEFAULT_LOG_LEVEL)))
+logger = logging.getLogger(settings.LOGGER_NAME)
+logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 
 handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter(fmt=constants.DEFAULT_LOG_FORMAT, datefmt=constants.DEFAULT_DATE_FORMAT))
+handler.setFormatter(logging.Formatter(fmt=settings.LOG_FORMAT, datefmt=settings.DATE_FORMAT))
 logger.addHandler(handler)

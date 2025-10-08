@@ -10,4 +10,3 @@ def load_prompt_template(filename: str) -> Template:
 def load_prompt_text(filename: str) -> str:
     """Load prompt text from the prompts directory"""
     return Path(f"prompts/{filename}").read_text().strip()
-

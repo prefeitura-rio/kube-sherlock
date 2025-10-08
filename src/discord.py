@@ -6,8 +6,9 @@ import discord
 if TYPE_CHECKING:
     from discord.abc import Messageable, MessageableChannel
 
-from .constants import MessageState, constants
+from .constants import MessageState
 from .logger import logger
+from .settings import settings
 from .utils import split_content
 
 
@@ -43,16 +44,16 @@ class MessageStateMachine:
         """Process message based on its state and extract question if valid"""
         match self.state:
             case MessageState.DM_MESSAGE_NOT_IN_WHITELIST:
-                await message.channel.send(constants.WHITELIST_DENIED_MESSAGE)
+                await message.channel.send(settings.WHITELIST_DENIED_MESSAGE)
                 return None
             case MessageState.NO_WHITELIST:
-                await message.channel.send(constants.DM_DISABLED_MESSAGE)
+                await message.channel.send(settings.DM_DISABLED_MESSAGE)
                 return None
             case MessageState.CHANNEL_MESSAGE:
-                if not message.content.startswith(constants.SHERLOCK_COMMAND):
+                if not message.content.startswith(settings.SHERLOCK_COMMAND):
                     return None
 
-                return message.content.replace(constants.SHERLOCK_COMMAND, "").strip()
+                return message.content.replace(settings.SHERLOCK_COMMAND, "").strip()
             case MessageState.VALID_DM_MESSAGE:
                 return message.content.strip()
             case _:
@@ -61,7 +62,7 @@ class MessageStateMachine:
 
 async def handle_sherlock_message(channel: "MessageableChannel", response: str):
     """Handle a !sherlock command message with pre-generated response"""
-    safe_limit = constants.DISCORD_CHAR_LIMIT - 50
+    safe_limit = settings.DISCORD_CHAR_LIMIT - 50
 
     if len(response) < safe_limit:
         logger.info("Sending single message (under limit)")
@@ -77,7 +78,7 @@ async def handle_sherlock_message(channel: "MessageableChannel", response: str):
     await send_long_message(channel, response)
 
 
-async def send_long_message(channel: "Messageable", content: str, max_length: int = constants.DISCORD_CHAR_LIMIT):
+async def send_long_message(channel: "Messageable", content: str, max_length: int = settings.DISCORD_CHAR_LIMIT):
     """Send a long message in chunks to avoid Discord's character limit."""
     chunks = split_content(content, max_length)
 

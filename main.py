@@ -6,7 +6,7 @@ import uvloop
 from mlflow import pydantic_ai
 
 import discord
-from src.agent import agent
+from src.agent import kube_sherlock
 from src.discord import MessageStateMachine, handle_sherlock_message
 from src.healthcheck import run_http_server
 from src.logger import logger
@@ -41,7 +41,7 @@ async def on_message(message: discord.Message):
         return
 
     async with message.channel.typing():
-        response = await agent.run(question)
+        response = await kube_sherlock.run(question)
         await handle_sherlock_message(message.channel, response)
 
 
