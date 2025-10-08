@@ -11,47 +11,52 @@ from .logger import logger
 from .utils import split_content
 
 
-def validate_message(message: discord.Message, whitelisted_users: set[str]) -> MessageState:
-    """Validate message and return appropriate state."""
-    match message.channel:
-        case discord.DMChannel():
-            if not whitelisted_users:
-                return MessageState.NO_WHITELIST
-
-            if message.author.name not in whitelisted_users:
-                return MessageState.DM_MESSAGE_NOT_IN_WHITELIST
-
-            return MessageState.VALID_DM_MESSAGE
-        case _:
-            return MessageState.CHANNEL_MESSAGE
-
-
 @dataclass
 class MessageStateMachine:
     """Main message state machine that coordinates validation and processing."""
 
-    current_state: MessageState = field(default_factory=lambda: MessageState.INCOMING_MESSAGE)
+    current: MessageState = field(default_factory=lambda: MessageState.INCOMING_MESSAGE)
 
-    def process_state(self, message: discord.Message, whitelisted_users: set[str]) -> MessageState:
+    def validate(self, message: discord.Message, whitelisted_users: set[str]) -> MessageState:
+        """Validate message and return appropriate state."""
+        match message.channel:
+            case discord.DMChannel():
+                if not whitelisted_users:
+                    return MessageState.NO_WHITELIST
+
+                if message.author.name not in whitelisted_users:
+                    return MessageState.DM_MESSAGE_NOT_IN_WHITELIST
+
+                return MessageState.VALID_DM_MESSAGE
+            case _:
+                return MessageState.CHANNEL_MESSAGE
+
+    def process_state(self, message: discord.Message, whitelisted_users: set[str]) -> None:
         """Process message state using validation function."""
         logger.debug("Processing message from %s in %s", message.author.name, type(message.channel).__name__)
 
-        new_state = validate_message(message, whitelisted_users)
+        self.current = self.validate(message, whitelisted_users)
 
-        logger.debug("State transition: %s -> %s (%s)", MessageState.INCOMING_MESSAGE, new_state, new_state.value)
+        logger.debug("State transition: %s -> %s (%s)", MessageState.INCOMING_MESSAGE, self.current, self.current.value)
 
-        self.current_state = new_state
+    async def process_message(self, message: discord.Message) -> str | None:
+        """Process message based on its state and extract question if valid"""
+        match self.state:
+            case MessageState.DM_MESSAGE_NOT_IN_WHITELIST:
+                await message.channel.send(constants.WHITELIST_DENIED_MESSAGE)
+                return None
+            case MessageState.NO_WHITELIST:
+                await message.channel.send(constants.DM_DISABLED_MESSAGE)
+                return None
+            case MessageState.CHANNEL_MESSAGE:
+                if not message.content.startswith(constants.SHERLOCK_COMMAND):
+                    return None
 
-        return new_state
-
-
-async def send_long_message(channel: "Messageable", content: str, max_length: int = constants.DISCORD_CHAR_LIMIT):
-    """Send a long message in chunks to avoid Discord's character limit."""
-    chunks = split_content(content, max_length)
-
-    for i, chunk in enumerate(chunks):
-        logger.debug("Sending chunk %d/%d: %d chars", i + 1, len(chunks), len(chunk))
-        await channel.send(chunk)
+                return message.content.replace(constants.SHERLOCK_COMMAND, "").strip()
+            case MessageState.VALID_DM_MESSAGE:
+                return message.content.strip()
+            case _:
+                return None
 
 
 async def handle_sherlock_message(channel: "MessageableChannel", response: str):
@@ -70,3 +75,12 @@ async def handle_sherlock_message(channel: "MessageableChannel", response: str):
 
     logger.info("Sending as multiple chunks (over limit)")
     await send_long_message(channel, response)
+
+
+async def send_long_message(channel: "Messageable", content: str, max_length: int = constants.DISCORD_CHAR_LIMIT):
+    """Send a long message in chunks to avoid Discord's character limit."""
+    chunks = split_content(content, max_length)
+
+    for i, chunk in enumerate(chunks):
+        logger.debug("Sending chunk %d/%d: %d chars", i + 1, len(chunks), len(chunk))
+        await channel.send(chunk)
