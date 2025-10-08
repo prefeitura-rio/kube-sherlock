@@ -1,5 +1,5 @@
 [project]
-name = "k8s-debug-agent"
+name = "kube-sherlock"
 version = "0.1.0"
 description = "A Discord chatbot for debugging Kubernetes logs"
 readme = "README.md"
@@ -7,20 +7,14 @@ requires-python = ">=3.13"
 dependencies = [
   "aiohttp>=3.10.0",
   "discord-py>=2.6.0",
-  "langchain-community>=0.3.27",
-  "langchain-mcp-adapters>=0.1.9",
-  "langchain[google-genai]>=0.3.27",
-  "langgraph-checkpoint-redis>=0.1.1",
-  "langgraph>=0.6.6",
-  "langmem>=0.0.29",
   "mlflow>=3.3.2",
   "opentelemetry-distro>=0.57b0",
   "opentelemetry-exporter-otlp>=1.36.0",
   "opentelemetry-instrumentation-aiohttp-server==0.57b0",
   "opentelemetry-instrumentation-asyncio==0.57b0",
   "opentelemetry-instrumentation-logging==0.57b0",
-  "opentelemetry-instrumentation-redis==0.57b0",
   "opentelemetry-instrumentation-system-metrics>=0.57b0",
+  "pydantic-ai-slim[dbos,evals,mcp,vertexai]>=1.0.15",
   "pydantic-settings>=2.10.1",
   "pydantic>=2.11.7",
   "uvloop>=0.21.0",
@@ -28,13 +22,7 @@ dependencies = [
 
 [dependency-groups]
 debug = ["debugpy>=1.8.0"]
-dev = [
-  "deepeval>=3.4.0",
-  "mypy>=1.17.1",
-  "pytest>=8.0.0",
-  "ruff>=0.12.9",
-  "testcontainers>=4.12.0",
-]
+dev = ["deepeval>=3.4.0", "mypy>=1.17.1", "pytest>=8.0.0", "ruff>=0.12.9"]
 
 [tool.basedpyright]
 typeCheckingMode = "standard"
